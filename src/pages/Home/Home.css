@@ -1,0 +1,839 @@
+/* =========================================
+   HOME PAGE
+========================================= */
+
+.home-page {
+  min-height: 100vh;
+  background: #f7f6f2;
+  color: #222;
+}
+
+
+/* =========================================
+   MAIN
+========================================= */
+
+.home-main {
+  width: 92%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 0 45px;
+}
+
+
+/* =========================================
+   HERO
+========================================= */
+
+.home-hero {
+  background:
+    linear-gradient(
+      135deg,
+      #1f6b3a,
+      #2d8050
+    );
+
+  border-radius: 18px;
+
+  padding: 48px 40px;
+
+  margin-bottom: 38px;
+
+  box-shadow:
+    0 8px 25px
+    rgba(0, 0, 0, 0.12);
+}
+
+.home-hero-content {
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+
+/* =========================================
+   HIDE DUPLICATE HERO LOGO
+   Header already contains the logo.
+========================================= */
+
+.home-logo {
+  display: none !important;
+}
+
+
+/* =========================================
+   HERO BADGE
+========================================= */
+
+.home-hero-badge {
+  display: inline-block;
+
+  padding: 8px 18px;
+
+  margin-bottom: 20px;
+
+  border: 2px solid
+    rgba(255, 255, 255, 0.35);
+
+  border-radius: 30px;
+
+  color: #ffffff;
+
+  font-size: 13px;
+
+  font-weight: 800;
+
+  letter-spacing: 1.5px;
+}
+
+
+/* =========================================
+   HERO TITLE
+========================================= */
+
+.home-hero h1 {
+  margin: 0 0 12px;
+
+  color: #ffffff;
+
+  font-size: 42px;
+
+  font-weight: 800;
+
+  line-height: 1.15;
+}
+
+
+/* =========================================
+   HERO TEXT
+========================================= */
+
+.home-hero p {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.92);
+
+  font-size: 17px;
+
+  line-height: 1.6;
+}
+
+
+/* =========================================
+   SECTION LABEL
+========================================= */
+
+.home-section-label {
+  display: block;
+
+  margin-bottom: 8px;
+
+  color: #1f6b3a;
+
+  font-size: 13px;
+
+  font-weight: 800;
+
+  letter-spacing: 1.5px;
+}
+
+
+/* =========================================
+   SECTION TITLE
+========================================= */
+
+.home-section-title {
+  margin: 0 0 24px;
+
+  color: #222;
+
+  font-size: 30px;
+
+  font-weight: 800;
+}
+
+
+/* =========================================
+   LATEST EDITION SECTION
+========================================= */
+
+.home-latest-section {
+  margin-bottom: 42px;
+}
+
+
+/* =========================================
+   LATEST CARD
+========================================= */
+
+.home-latest-card {
+  background: #ffffff;
+
+  border: 1px solid #e5dfd0;
+
+  border-radius: 18px;
+
+  overflow: hidden;
+
+  box-shadow:
+    0 6px 22px
+    rgba(0, 0, 0, 0.07);
+}
+
+
+/* =========================================
+   LATEST TOP
+========================================= */
+
+.home-latest-top {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 15px;
+
+  padding: 18px 28px;
+
+  background: #faf8f1;
+
+  border-bottom:
+    1px solid #e5dfd0;
+}
+
+.home-latest-label {
+  color: #1f6b3a;
+
+  font-size: 13px;
+
+  font-weight: 800;
+
+  letter-spacing: 1px;
+}
+
+.home-latest-date {
+  color: #666;
+
+  font-size: 16px;
+
+  font-weight: 600;
+}
+
+
+/* =========================================
+   LATEST CONTENT
+========================================= */
+
+.home-latest-content {
+  display: flex;
+
+  align-items: center;
+
+  gap: 24px;
+
+  padding: 28px;
+}
+
+
+/* =========================================
+   NEWSPAPER ICON
+========================================= */
+
+.home-newspaper-icon {
+  width: 70px;
+  height: 70px;
+
+  flex-shrink: 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  background: #edf5ef;
+
+  border-radius: 16px;
+
+  font-size: 32px;
+}
+
+
+/* =========================================
+   LATEST INFORMATION
+========================================= */
+
+.home-latest-info {
+  flex: 1;
+
+  min-width: 0;
+}
+
+.home-latest-info h3 {
+  margin: 0 0 7px;
+
+  color: #1f6b3a;
+
+  font-size: 23px;
+
+  font-weight: 800;
+}
+
+.home-latest-info p {
+  margin: 0 0 6px;
+
+  color: #555;
+
+  font-size: 16px;
+
+  font-weight: 600;
+}
+
+.home-latest-info span {
+  color: #888;
+
+  font-size: 14px;
+}
+
+
+/* =========================================
+   READ BUTTON
+========================================= */
+
+.home-read-button {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  min-width: 165px;
+
+  padding: 13px 20px;
+
+  background: #1f6b3a;
+
+  color: #ffffff;
+
+  border-radius: 9px;
+
+  font-size: 15px;
+
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.home-read-button:hover {
+  background: #18562e;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 5px 12px
+    rgba(31, 107, 58, 0.25);
+}
+
+
+/* =========================================
+   LOADING / ERROR / EMPTY
+========================================= */
+
+.home-loading,
+.home-error,
+.home-empty {
+  background: #ffffff;
+
+  border: 1px solid #e5dfd0;
+
+  border-radius: 14px;
+
+  padding: 25px;
+
+  text-align: center;
+
+  color: #666;
+
+  box-shadow:
+    0 4px 15px
+    rgba(0, 0, 0, 0.05);
+}
+
+.home-error {
+  color: #b00020;
+
+  font-weight: 600;
+}
+
+
+/* =========================================
+   CALENDAR / ARCHIVE
+========================================= */
+
+.home-calendar-section {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 30px;
+
+  margin-bottom: 42px;
+
+  padding: 30px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5dfd0;
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 5px 20px
+    rgba(0, 0, 0, 0.06);
+}
+
+.home-calendar-content {
+  flex: 1;
+}
+
+.home-calendar-content h2 {
+  margin: 0 0 8px;
+
+  color: #222;
+
+  font-size: 26px;
+
+  font-weight: 800;
+}
+
+.home-calendar-content p {
+  margin: 0;
+
+  color: #666;
+
+  line-height: 1.6;
+}
+
+.home-calendar-button {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  min-width: 150px;
+
+  padding: 13px 20px;
+
+  background: #ffffff;
+
+  color: #1f6b3a;
+
+  border: 2px solid #1f6b3a;
+
+  border-radius: 9px;
+
+  font-size: 15px;
+
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition: 0.2s ease;
+}
+
+.home-calendar-button:hover {
+  background: #1f6b3a;
+
+  color: #ffffff;
+}
+
+
+/* =========================================
+   ABOUT
+========================================= */
+
+.home-about-section {
+  margin-bottom: 35px;
+
+  padding: 30px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5dfd0;
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 5px 20px
+    rgba(0, 0, 0, 0.05);
+}
+
+.home-about-section h2 {
+  margin: 0 0 10px;
+
+  color: #1f6b3a;
+
+  font-size: 26px;
+
+  font-weight: 800;
+}
+
+.home-about-section p {
+  max-width: 850px;
+
+  margin: 0;
+
+  color: #666;
+
+  font-size: 15px;
+
+  line-height: 1.8;
+}
+
+
+/* =========================================
+   FOOTER
+========================================= */
+
+.home-footer {
+  padding: 25px 20px;
+
+  background: #1f6b3a;
+
+  color:
+    rgba(255, 255, 255, 0.9);
+
+  text-align: center;
+
+  font-size: 13px;
+}
+
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 800px) {
+
+  .home-main {
+    width: 94%;
+
+    padding-top: 24px;
+  }
+
+  .home-hero {
+    padding: 40px 25px;
+
+    margin-bottom: 32px;
+  }
+
+  .home-hero h1 {
+    font-size: 34px;
+  }
+
+  .home-latest-content {
+    flex-wrap: wrap;
+  }
+
+  .home-read-button {
+    width: 100%;
+  }
+
+  .home-calendar-section {
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+  .home-calendar-button {
+    width: 100%;
+  }
+}
+
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 600px) {
+
+  .home-main {
+    width: 92%;
+
+    padding: 18px 0 30px;
+  }
+
+
+  /* ================================
+     HERO
+  ================================= */
+
+  .home-hero {
+    padding: 34px 18px;
+
+    border-radius: 15px;
+
+    margin-bottom: 28px;
+
+    box-shadow:
+      0 6px 18px
+      rgba(0, 0, 0, 0.10);
+  }
+
+  .home-hero-badge {
+    padding: 8px 17px;
+
+    margin-bottom: 18px;
+
+    font-size: 12px;
+  }
+
+  .home-hero h1 {
+    font-size: 29px;
+
+    line-height: 1.2;
+
+    margin-bottom: 10px;
+  }
+
+  .home-hero p {
+    font-size: 14px;
+
+    line-height: 1.5;
+  }
+
+
+  /* ================================
+     SECTIONS
+  ================================= */
+
+  .home-section-label {
+    margin-bottom: 7px;
+
+    font-size: 12px;
+  }
+
+  .home-section-title {
+    font-size: 25px;
+
+    margin-bottom: 20px;
+  }
+
+
+  /* ================================
+     LATEST
+  ================================= */
+
+  .home-latest-section {
+    margin-bottom: 32px;
+  }
+
+  .home-latest-top {
+    display: block;
+
+    padding: 17px 18px;
+  }
+
+  .home-latest-label {
+    display: block;
+
+    margin-bottom: 10px;
+
+    font-size: 12px;
+  }
+
+  .home-latest-date {
+    display: block;
+
+    font-size: 16px;
+  }
+
+
+  /* ================================
+     LATEST CONTENT
+  ================================= */
+
+  .home-latest-content {
+    display: block;
+
+    padding: 22px 18px;
+  }
+
+
+  /* ================================
+     ICON
+  ================================= */
+
+  .home-newspaper-icon {
+    width: 62px;
+    height: 62px;
+
+    margin-bottom: 18px;
+
+    border-radius: 15px;
+
+    font-size: 29px;
+  }
+
+
+  /* ================================
+     INFORMATION
+  ================================= */
+
+  .home-latest-info {
+    width: 100%;
+  }
+
+  .home-latest-info h3 {
+    margin-bottom: 7px;
+
+    font-size: 21px;
+
+    line-height: 1.25;
+  }
+
+  .home-latest-info p {
+    margin-bottom: 6px;
+
+    font-size: 15px;
+  }
+
+  .home-latest-info span {
+    display: block;
+
+    margin-bottom: 20px;
+
+    font-size: 13px;
+  }
+
+
+  /* ================================
+     READ BUTTON
+  ================================= */
+
+  .home-read-button {
+    width: 100%;
+
+    min-width: 0;
+
+    min-height: 48px;
+
+    padding: 13px 16px;
+
+    border-radius: 9px;
+
+    font-size: 15px;
+  }
+
+
+  /* ================================
+     CALENDAR
+  ================================= */
+
+  .home-calendar-section {
+    display: block;
+
+    padding: 22px 18px;
+
+    margin-bottom: 32px;
+
+    border-radius: 15px;
+  }
+
+  .home-calendar-content h2 {
+    font-size: 22px;
+
+    line-height: 1.3;
+  }
+
+  .home-calendar-content p {
+    font-size: 14px;
+
+    line-height: 1.6;
+
+    margin-bottom: 18px;
+  }
+
+  .home-calendar-button {
+    width: 100%;
+
+    min-height: 48px;
+
+    padding: 13px 16px;
+
+    font-size: 14px;
+  }
+
+
+  /* ================================
+     ABOUT
+  ================================= */
+
+  .home-about-section {
+    padding: 22px 18px;
+
+    border-radius: 15px;
+  }
+
+  .home-about-section h2 {
+    font-size: 22px;
+
+    line-height: 1.3;
+  }
+
+  .home-about-section p {
+    font-size: 14px;
+
+    line-height: 1.7;
+  }
+}
+
+
+/* =========================================
+   VERY SMALL MOBILE
+========================================= */
+
+@media (max-width: 400px) {
+
+  .home-main {
+    width: 91%;
+  }
+
+  .home-hero {
+    padding: 30px 15px;
+  }
+
+  .home-hero h1 {
+    font-size: 25px;
+  }
+
+  .home-hero p {
+    font-size: 13px;
+  }
+
+  .home-section-title {
+    font-size: 23px;
+  }
+
+  .home-latest-info h3 {
+    font-size: 19px;
+  }
+
+  .home-latest-date {
+    font-size: 15px;
+  }
+
+  .home-read-button,
+  .home-calendar-button {
+    font-size: 13px;
+  }
+}

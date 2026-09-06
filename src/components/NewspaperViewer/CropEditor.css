@@ -1,0 +1,312 @@
+.crop-editor {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  overflow: visible;
+}
+
+.crop-editor * {
+  box-sizing: border-box;
+}
+
+.crop-editor-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.crop-editor-header h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.crop-editor-header p {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+
+/* =========================================================
+   CONTROLS
+   ========================================================= */
+
+.page-controls,
+.zoom-controls,
+.crop-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.page-controls button,
+.zoom-controls button,
+.crop-controls button {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.page-controls button:disabled,
+.zoom-controls button:disabled,
+.crop-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-number,
+.zoom-value {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   INSTRUCTIONS
+   ========================================================= */
+
+.crop-instructions {
+  width: 100%;
+  padding: 10px 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  background: #f5f5f5;
+  text-align: center;
+}
+
+.crop-instructions p {
+  margin: 4px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   NEWSPAPER CONTAINER
+   ========================================================= */
+
+.crop-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 70vh;
+  min-height: 400px;
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #f4f4f4;
+
+  padding: 0;
+}
+
+/*
+  This wrapper MUST NOT have a fixed height.
+
+  Its height comes from the complete newspaper canvas.
+*/
+.crop-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* =========================================================
+   NEWSPAPER CANVAS
+   ========================================================= */
+
+.crop-canvas {
+  display: block;
+
+  width: 100%;
+  height: auto;
+
+  max-width: none;
+
+  margin: 0 auto;
+
+  background: #fff;
+
+  /*
+    Prevent browser image-selection behaviour.
+  */
+  user-select: none;
+  -webkit-user-select: none;
+
+  /*
+    Important for mobile.
+  */
+  -webkit-touch-callout: none;
+}
+
+/* =========================================================
+   CROP SELECTION
+   ========================================================= */
+
+.crop-selection {
+  position: absolute;
+
+  border: 3px solid #1976d2;
+
+  background: rgba(25, 118, 210, 0.18);
+
+  pointer-events: none;
+
+  z-index: 10;
+}
+
+/* =========================================================
+   LOADING
+   ========================================================= */
+
+.crop-loading {
+  width: 100%;
+  padding: 20px;
+  text-align: center;
+}
+
+.crop-loading h2 {
+  margin: 0 0 8px;
+}
+
+.crop-loading p {
+  margin: 0;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.crop-error {
+  width: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+.crop-error h2 {
+  margin-top: 0;
+}
+
+/* =========================================================
+   PREVIEW
+   ========================================================= */
+
+.crop-preview {
+  width: 100%;
+  text-align: center;
+}
+
+.crop-preview img {
+  display: block;
+
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+
+  margin: 0 auto;
+
+  border-radius: 8px;
+}
+
+/* =========================================================
+   BUTTON TYPES
+   ========================================================= */
+
+.download-btn {
+  font-weight: 600;
+}
+
+.share-btn {
+  font-weight: 600;
+}
+
+.close-btn {
+  font-weight: 600;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+  .crop-editor {
+    padding: 10px;
+  }
+
+  .crop-editor-header h1 {
+    font-size: 20px;
+  }
+
+  .crop-editor-header p {
+    font-size: 13px;
+  }
+
+  .page-controls,
+  .zoom-controls,
+  .crop-controls {
+    gap: 6px;
+  }
+
+  .page-controls button,
+  .zoom-controls button,
+  .crop-controls button {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .crop-container {
+    height: 70vh;
+    min-height: 350px;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .crop-instructions {
+    font-size: 13px;
+  }
+
+  .crop-instructions p {
+    font-size: 13px;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 400px) {
+  .crop-editor {
+    padding: 8px;
+  }
+
+  .crop-container {
+    height: 68vh;
+    min-height: 320px;
+  }
+
+  .page-controls button,
+  .zoom-controls button,
+  .crop-controls button {
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+}

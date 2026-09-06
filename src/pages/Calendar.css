@@ -1,0 +1,474 @@
+/* ================================
+   SHUBHODAYAM BHARATH
+   NEWSPAPER CALENDAR
+================================ */
+
+.calendar-page {
+  min-height: 100vh;
+  background: #f5f7fa;
+  color: #1f2937;
+}
+
+/* ================================
+   HEADER
+================================ */
+
+.calendar-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 18px 6%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 25px;
+  flex-wrap: wrap;
+}
+
+.calendar-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.calendar-logo {
+  color: #123c69;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.calendar-tagline {
+  color: #6b7280;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  font-style: italic;
+}
+
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-navigation a {
+  color: #374151;
+  text-decoration: none;
+  padding: 9px 14px;
+  border-radius: 7px;
+  font-weight: 600;
+  transition: 0.2s ease;
+}
+
+.calendar-navigation a:hover {
+  background: #eef3f8;
+  color: #123c69;
+}
+
+.calendar-navigation a.active {
+  background: #123c69;
+  color: white;
+}
+
+/* ================================
+   MAIN
+================================ */
+
+.calendar-main {
+  width: min(1100px, 92%);
+  margin: 0 auto;
+  padding: 40px 0 60px;
+}
+
+.calendar-title-section {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.calendar-title-section h1 {
+  margin: 0 0 10px;
+  color: #123c69;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 36px;
+}
+
+.calendar-title-section p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+/* ================================
+   CALENDAR CARD
+================================ */
+
+.calendar-card {
+  background: white;
+  border: 1px solid #e1e6eb;
+  border-radius: 16px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+/* ================================
+   TOOLBAR
+================================ */
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 28px;
+  background: #123c69;
+  color: white;
+}
+
+.month-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 9px;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.month-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.month-title {
+  text-align: center;
+}
+
+.month-title h2 {
+  margin: 0 0 7px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+}
+
+.today-button {
+  border: none;
+  background: white;
+  color: #123c69;
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ================================
+   WEEKDAYS
+================================ */
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #eef3f8;
+  border-bottom: 1px solid #dce3ea;
+}
+
+.calendar-weekdays div {
+  text-align: center;
+  padding: 14px 5px;
+  color: #123c69;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ================================
+   DAYS
+================================ */
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.calendar-day {
+  min-height: 95px;
+  border: 0;
+  border-right: 1px solid #edf0f3;
+  border-bottom: 1px solid #edf0f3;
+  background: white;
+  padding: 10px;
+  text-align: left;
+  cursor: default;
+  position: relative;
+  transition: 0.2s ease;
+}
+
+.calendar-day.empty {
+  background: #fafafa;
+}
+
+.calendar-day.has-edition {
+  cursor: pointer;
+  background: #f8fbff;
+}
+
+.calendar-day.has-edition:hover {
+  background: #eaf3fb;
+  transform: scale(1.015);
+  z-index: 2;
+  box-shadow: 0 3px 12px rgba(18, 60, 105, 0.15);
+}
+
+.day-number {
+  display: block;
+  color: #374151;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.calendar-day.today .day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: #123c69;
+  color: white;
+  border-radius: 50%;
+}
+
+.edition-dot {
+  display: block;
+  margin-top: 10px;
+  color: #167447;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.calendar-day.has-edition .edition-dot::before {
+  content: "●";
+  margin-right: 4px;
+}
+
+/* ================================
+   LEGEND
+================================ */
+
+.calendar-legend {
+  display: flex;
+  gap: 25px;
+  padding: 17px 24px;
+  background: #fafbfc;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-dot.available {
+  background: #167447;
+}
+
+.legend-dot.unavailable {
+  background: #cbd5e1;
+}
+
+/* ================================
+   EDITIONS
+================================ */
+
+.editions-section {
+  margin-top: 40px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: #123c69;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 25px;
+}
+
+.section-heading span {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* ================================
+   EDITION LIST
+================================ */
+
+.edition-list {
+  display: grid;
+  gap: 12px;
+}
+
+.edition-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: white;
+  border: 1px solid #e1e6eb;
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: 0.2s ease;
+}
+
+.edition-card:hover {
+  border-color: #b9cce0;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.05);
+}
+
+.edition-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.edition-label {
+  color: #123c69;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.edition-info strong {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.read-edition-button {
+  border: none;
+  background: #123c69;
+  color: white;
+  padding: 10px 17px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+  white-space: nowrap;
+}
+
+.read-edition-button:hover {
+  background: #0d2d4f;
+}
+
+/* ================================
+   MESSAGES
+================================ */
+
+.calendar-message {
+  background: white;
+  border: 1px solid #e1e6eb;
+  border-radius: 12px;
+  padding: 25px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.calendar-error {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ================================
+   FOOTER
+================================ */
+
+.calendar-footer {
+  text-align: center;
+  padding: 25px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* ================================
+   MOBILE
+================================ */
+
+@media (max-width: 700px) {
+
+  .calendar-header {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .calendar-brand {
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .calendar-logo {
+    font-size: 25px;
+  }
+
+  .calendar-navigation {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .calendar-main {
+    width: 95%;
+    padding-top: 25px;
+  }
+
+  .calendar-title-section h1 {
+    font-size: 28px;
+  }
+
+  .calendar-toolbar {
+    padding: 16px;
+  }
+
+  .calendar-day {
+    min-height: 70px;
+    padding: 7px;
+  }
+
+  .day-number {
+    font-size: 14px;
+  }
+
+  .edition-dot {
+    font-size: 9px;
+    margin-top: 6px;
+  }
+
+  .edition-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .read-edition-button {
+    width: 100%;
+  }
+
+}

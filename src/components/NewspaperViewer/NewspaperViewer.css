@@ -1,0 +1,648 @@
+/* =========================================================
+   SHUBHODAYAM BHARATH
+   NEWSPAPER VIEWER
+   ========================================================= */
+
+.newspaper-viewer {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.viewer-header {
+  text-align: center;
+  padding: 24px 20px;
+  margin-bottom: 18px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+.viewer-label {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1f8f4d;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.viewer-header h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: #111827;
+}
+
+.viewer-date {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* =========================================================
+   NEWSPAPER PAGE AREA
+   ========================================================= */
+
+.newspaper-page-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   PDF CONTAINER
+   ========================================================= */
+
+.viewer-pdf-container {
+  position: relative;
+
+  width: 100%;
+  max-width: 1000px;
+
+  height: 78vh;
+  min-height: 500px;
+
+  overflow: auto;
+
+  background: #e9eaec;
+
+  border-radius: 12px;
+  border: 1px solid #d9dde2;
+
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.08);
+
+  box-sizing: border-box;
+
+  -webkit-overflow-scrolling: touch;
+
+  /*
+     Allow normal finger scrolling.
+     Our pointer handlers take over when zoomed.
+  */
+  touch-action: pan-x pan-y;
+
+  overscroll-behavior: contain;
+
+  scrollbar-width: thin;
+}
+
+/* =========================================================
+   PDF PAGE SURFACE
+   ========================================================= */
+
+.viewer-page-surface {
+  position: relative;
+
+  width: max-content;
+  min-width: 100%;
+
+  min-height: 100%;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  box-sizing: border-box;
+
+  padding: 14px;
+
+  transform-origin: top center;
+
+  will-change: transform;
+
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* =========================================================
+   PDF CANVAS
+   ========================================================= */
+
+.viewer-pdf-canvas {
+  display: block;
+
+  width: auto;
+  height: auto;
+
+  max-width: none;
+
+  margin: 0 auto;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 3px 15px rgba(0, 0, 0, 0.14);
+
+  user-select: none;
+  -webkit-user-select: none;
+
+  -webkit-touch-callout: none;
+}
+
+/* =========================================================
+   PREVIOUS / NEXT BUTTONS
+   ========================================================= */
+
+.newspaper-nav-button {
+  flex: 0 0 auto;
+
+  width: 52px;
+  height: 72px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: #1f8f4d;
+  color: #ffffff;
+
+  font-size: 46px;
+  line-height: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 5px 16px rgba(0, 0, 0, 0.16);
+
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease,
+    background 0.15s ease;
+
+  z-index: 5;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+.newspaper-nav-button:hover:not(:disabled) {
+  background: #18743e;
+  transform: scale(1.04);
+}
+
+.newspaper-nav-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.newspaper-nav-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* =========================================================
+   PAGE INDICATOR
+   ========================================================= */
+
+.viewer-page-indicator {
+  width: fit-content;
+
+  margin: 14px auto 0;
+
+  padding: 8px 18px;
+
+  border-radius: 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  color: #111827;
+
+  font-size: 15px;
+  font-weight: 700;
+
+  box-shadow:
+    0 3px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* =========================================================
+   ZOOM HINT
+   ========================================================= */
+
+.viewer-zoom-hint {
+  margin: 8px auto 0;
+
+  text-align: center;
+
+  color: #6b7280;
+
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* =========================================================
+   RENDERING MESSAGE
+   ========================================================= */
+
+.pdf-rendering-message {
+  width: fit-content;
+
+  margin: 10px auto 0;
+
+  padding: 7px 14px;
+
+  border-radius: 18px;
+
+  background: rgba(17, 24, 39, 0.88);
+
+  color: #ffffff;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  text-align: center;
+}
+
+/* =========================================================
+   PDF PLACEHOLDER
+   ========================================================= */
+
+.pdf-placeholder {
+  min-height: 300px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+
+  padding: 30px;
+
+  box-sizing: border-box;
+}
+
+.pdf-placeholder h3 {
+  margin: 0 0 10px;
+
+  color: #111827;
+
+  font-size: 22px;
+}
+
+.pdf-placeholder p {
+  margin: 0;
+
+  max-width: 600px;
+
+  color: #6b7280;
+
+  line-height: 1.6;
+}
+
+/* =========================================================
+   ACTION BUTTONS
+   ========================================================= */
+
+.viewer-actions {
+  display: flex;
+
+  justify-content: center;
+  align-items: center;
+
+  gap: 12px;
+
+  flex-wrap: wrap;
+
+  padding: 20px 0 5px;
+}
+
+.viewer-actions button {
+  min-width: 120px;
+  min-height: 44px;
+
+  padding: 10px 20px;
+
+  border: none;
+  border-radius: 9px;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viewer-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 5px 14px rgba(0, 0, 0, 0.12);
+}
+
+.viewer-actions button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.viewer-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* =========================================================
+   PRIMARY BUTTON
+   ========================================================= */
+
+.primary-button {
+  background: #1f8f4d;
+  color: #ffffff;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #18743e;
+}
+
+/* =========================================================
+   SECONDARY BUTTON
+   ========================================================= */
+
+.secondary-button {
+  background: #111827;
+  color: #ffffff;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+/* =========================================================
+   EMPTY VIEWER
+   ========================================================= */
+
+.viewer-empty {
+  width: 100%;
+  max-width: 900px;
+
+  margin: 40px auto;
+
+  padding: 50px 25px;
+
+  box-sizing: border-box;
+
+  text-align: center;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 5px 20px rgba(0, 0, 0, 0.06);
+}
+
+.viewer-empty h2 {
+  margin: 0 0 12px;
+
+  color: #111827;
+
+  font-size: 24px;
+}
+
+.viewer-empty p {
+  margin: 0;
+
+  color: #6b7280;
+
+  line-height: 1.6;
+}
+
+/* =========================================================
+   TABLET
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  .newspaper-viewer {
+    padding: 14px;
+  }
+
+  .newspaper-page-wrapper {
+    gap: 7px;
+  }
+
+  .newspaper-nav-button {
+    width: 44px;
+    height: 62px;
+
+    border-radius: 10px;
+
+    font-size: 40px;
+  }
+
+  .viewer-pdf-container {
+    height: 76vh;
+    min-height: 450px;
+  }
+
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 768px) {
+
+  .newspaper-viewer {
+    padding: 8px;
+  }
+
+  .viewer-header {
+    padding: 18px 12px;
+
+    margin-bottom: 10px;
+
+    border-radius: 12px;
+  }
+
+  .viewer-label {
+    font-size: 11px;
+
+    letter-spacing: 0.6px;
+  }
+
+  .viewer-header h2 {
+    font-size: 20px;
+  }
+
+  .viewer-date {
+    margin-top: 6px;
+
+    font-size: 12px;
+  }
+
+  /* -----------------------------------------------
+     NEWSPAPER + ARROWS
+     ----------------------------------------------- */
+
+  .newspaper-page-wrapper {
+    gap: 4px;
+
+    width: 100%;
+  }
+
+  .viewer-pdf-container {
+    width: calc(100% - 76px);
+
+    height: 70vh;
+
+    min-height: 420px;
+
+    border-radius: 9px;
+
+    box-shadow:
+      0 4px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  .viewer-page-surface {
+    padding: 8px;
+  }
+
+  .newspaper-nav-button {
+    width: 34px;
+    height: 56px;
+
+    border-radius: 9px;
+
+    font-size: 34px;
+
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.14);
+  }
+
+  /* -----------------------------------------------
+     PAGE NUMBER
+     ----------------------------------------------- */
+
+  .viewer-page-indicator {
+    margin-top: 10px;
+
+    padding: 7px 15px;
+
+    font-size: 13px;
+  }
+
+  .viewer-zoom-hint {
+    margin-top: 6px;
+
+    font-size: 11px;
+  }
+
+  /* -----------------------------------------------
+     ACTION BUTTONS
+     ----------------------------------------------- */
+
+  .viewer-actions {
+    display: grid;
+
+    grid-template-columns:
+      repeat(3, 1fr);
+
+    gap: 7px;
+
+    padding-top: 14px;
+  }
+
+  .viewer-actions button {
+    width: 100%;
+
+    min-width: 0;
+
+    min-height: 46px;
+
+    padding: 9px 6px;
+
+    font-size: 13px;
+
+    border-radius: 8px;
+  }
+
+}
+
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 480px) {
+
+  .viewer-pdf-container {
+    width: calc(100% - 66px);
+
+    height: 67vh;
+
+    min-height: 390px;
+  }
+
+  .newspaper-nav-button {
+    width: 29px;
+    height: 52px;
+
+    font-size: 31px;
+
+    border-radius: 8px;
+  }
+
+  .viewer-page-surface {
+    padding: 6px;
+  }
+
+  .viewer-actions button {
+    min-height: 44px;
+
+    font-size: 12px;
+  }
+
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .viewer-pdf-container {
+    width: calc(100% - 58px);
+
+    height: 64vh;
+
+    min-height: 360px;
+  }
+
+  .newspaper-nav-button {
+    width: 25px;
+    height: 48px;
+
+    font-size: 28px;
+  }
+
+  .viewer-page-indicator {
+    font-size: 12px;
+
+    padding: 6px 12px;
+  }
+
+}
