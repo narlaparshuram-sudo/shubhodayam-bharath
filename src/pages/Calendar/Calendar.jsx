@@ -21,6 +21,9 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Search editions
+  const [searchTerm, setSearchTerm] = useState("");
+
   // Save language selection
   useEffect(() => {
     localStorage.setItem("shubhodayam-language", language);
@@ -64,12 +67,18 @@ export default function Calendar() {
       noEditions:
         "No newspaper editions are available yet.",
 
+      noSearchResults:
+        "No editions found for your search.",
+
       readNewspaper: "Read Newspaper",
 
       unavailableTitle: "Newspaper not available",
 
       error:
         "Unable to load newspaper editions.",
+
+      searchPlaceholder: "Search by date...",
+      searchLabel: "Search newspaper by date",
     },
 
     te: {
@@ -109,6 +118,9 @@ export default function Calendar() {
       noEditions:
         "ఇంకా వార్తాపత్రిక సంచికలు అందుబాటులో లేవు.",
 
+      noSearchResults:
+        "మీ శోధనకు సంచికలు కనుగొనబడలేదు.",
+
       readNewspaper: "వార్తాపత్రిక చదవండి",
 
       unavailableTitle:
@@ -116,6 +128,12 @@ export default function Calendar() {
 
       error:
         "వార్తాపత్రిక సంచికలను లోడ్ చేయలేకపోయాము.",
+
+      searchPlaceholder:
+        "తేదీ ద్వారా వెతకండి...",
+
+      searchLabel:
+        "వార్తాపత్రిక తేదీని వెతకండి",
     },
   };
 
@@ -159,11 +177,40 @@ export default function Calendar() {
     return map;
   }, [editions]);
 
+  // Filter editions using search
+  const filteredEditions = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) {
+      return editions;
+    }
+
+    return editions.filter((edition) => {
+      const date = String(
+        edition.date || ""
+      ).toLowerCase();
+
+      const title = String(
+        edition.title || ""
+      ).toLowerCase();
+
+      return (
+        date.includes(term) ||
+        title.includes(term)
+      );
+    });
+  }, [editions, searchTerm]);
+
   // Calendar information
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 
-  const firstDay = new Date(year, month, 1).getDay();
+  const firstDay = new Date(
+    year,
+    month,
+    1
+  ).getDay();
+
   const daysInMonth = new Date(
     year,
     month + 1,
@@ -178,29 +225,58 @@ export default function Calendar() {
   }
 
   // Actual days
-  for (let day = 1; day <= daysInMonth; day++) {
+  for (
+    let day = 1;
+    day <= daysInMonth;
+    day++
+  ) {
     calendarDays.push(day);
   }
 
   // Month name
-  const monthName = currentMonth.toLocaleString(
-    language === "te" ? "te-IN" : "en-US",
-    {
-      month: "long",
-    }
-  );
+  const monthName =
+    currentMonth.toLocaleString(
+      language === "te"
+        ? "te-IN"
+        : "en-US",
+      {
+        month: "long",
+      }
+    );
 
   // Previous month
   function previousMonth() {
     setCurrentMonth(
-      new Date(year, month - 1, 1)
+      new Date(
+        year,
+        month - 1,
+        1
+      )
     );
   }
 
   // Next month
   function nextMonth() {
+    const currentYear =
+      today.getFullYear();
+
+    const currentMonth =
+      today.getMonth();
+
+    if (
+      year > currentYear ||
+      (year === currentYear &&
+        month >= currentMonth)
+    ) {
+      return;
+    }
+
     setCurrentMonth(
-      new Date(year, month + 1, 1)
+      new Date(
+        year,
+        month + 1,
+        1
+      )
     );
   }
 
@@ -217,16 +293,19 @@ export default function Calendar() {
 
   // Format YYYY-MM-DD
   function formatDate(day) {
-    return `${year}-${String(month + 1).padStart(
-      2,
-      "0"
-    )}-${String(day).padStart(2, "0")}`;
+    return `${year}-${String(
+      month + 1
+    ).padStart(2, "0")}-${String(
+      day
+    ).padStart(2, "0")}`;
   }
 
   // Open newspaper
   function openEdition(date) {
     if (editionDates[date]) {
-      navigate(`/newspaper/${date}`);
+      navigate(
+        `/newspaper/${date}`
+      );
     }
   }
 
@@ -234,6 +313,7 @@ export default function Calendar() {
     <div className="calendar-page">
 
       {/* HEADER */}
+
       <header className="calendar-header">
 
         <div className="calendar-brand">
@@ -283,7 +363,9 @@ export default function Calendar() {
                   ? "selected"
                   : ""
               }
-              onClick={() => setLanguage("te")}
+              onClick={() =>
+                setLanguage("te")
+              }
             >
               తెలుగు
             </button>
@@ -297,7 +379,9 @@ export default function Calendar() {
                   ? "selected"
                   : ""
               }
-              onClick={() => setLanguage("en")}
+              onClick={() =>
+                setLanguage("en")
+              }
             >
               English
             </button>
@@ -316,7 +400,9 @@ export default function Calendar() {
 
           <h1>{t.title}</h1>
 
-          <p>{t.description}</p>
+          <p>
+            {t.description}
+          </p>
 
         </div>
 
@@ -331,7 +417,9 @@ export default function Calendar() {
             <button
               type="button"
               className="month-button"
-              onClick={previousMonth}
+              onClick={
+                previousMonth
+              }
             >
               ‹
             </button>
@@ -345,7 +433,9 @@ export default function Calendar() {
               <button
                 type="button"
                 className="today-button"
-                onClick={goToToday}
+                onClick={
+                  goToToday
+                }
               >
                 {t.today}
               </button>
@@ -355,7 +445,15 @@ export default function Calendar() {
             <button
               type="button"
               className="month-button"
-              onClick={nextMonth}
+              onClick={
+                nextMonth
+              }
+              disabled={
+                year ===
+                  today.getFullYear() &&
+                month ===
+                  today.getMonth()
+              }
             >
               ›
             </button>
@@ -366,11 +464,13 @@ export default function Calendar() {
 
           <div className="calendar-weekdays">
 
-            {t.weekdays.map((day) => (
-              <div key={day}>
-                {day}
-              </div>
-            ))}
+            {t.weekdays.map(
+              (day) => (
+                <div key={day}>
+                  {day}
+                </div>
+              )
+            )}
 
           </div>
 
@@ -381,7 +481,9 @@ export default function Calendar() {
             {calendarDays.map(
               (day, index) => {
 
-                if (day === null) {
+                if (
+                  day === null
+                ) {
                   return (
                     <div
                       key={`empty-${index}`}
@@ -394,16 +496,23 @@ export default function Calendar() {
                   formatDate(day);
 
                 const edition =
-                  editionDates[dateString];
+                  editionDates[
+                    dateString
+                  ];
 
                 const isToday =
-                  day === today.getDate() &&
-                  month === today.getMonth() &&
-                  year === today.getFullYear();
+                  day ===
+                    today.getDate() &&
+                  month ===
+                    today.getMonth() &&
+                  year ===
+                    today.getFullYear();
 
                 return (
                   <button
-                    key={dateString}
+                    key={
+                      dateString
+                    }
                     type="button"
                     className={`calendar-day ${
                       edition
@@ -421,7 +530,9 @@ export default function Calendar() {
                         );
                       }
                     }}
-                    disabled={!edition}
+                    disabled={
+                      !edition
+                    }
                     title={
                       edition
                         ? `${t.readNewspaper} - ${dateString}`
@@ -474,6 +585,28 @@ export default function Calendar() {
 
         <section className="editions-section">
 
+          {/* SEARCH */}
+
+          <div className="edition-search">
+
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) =>
+                setSearchTerm(
+                  event.target.value
+                )
+              }
+              placeholder={
+                t.searchPlaceholder
+              }
+              aria-label={
+                t.searchLabel
+              }
+            />
+
+          </div>
+
           <div className="section-heading">
 
             <h2>
@@ -481,9 +614,10 @@ export default function Calendar() {
             </h2>
 
             <span>
-              {editions.length}{" "}
+              {filteredEditions.length}{" "}
 
-              {editions.length === 1
+              {filteredEditions.length ===
+              1
                 ? t.edition
                 : t.editions}
             </span>
@@ -510,9 +644,22 @@ export default function Calendar() {
 
           {!loading &&
             !error &&
-            editions.length === 0 && (
+            editions.length ===
+              0 && (
               <div className="calendar-message">
                 {t.noEditions}
+              </div>
+            )}
+
+          {/* NO SEARCH RESULTS */}
+
+          {!loading &&
+            !error &&
+            editions.length > 0 &&
+            filteredEditions.length ===
+              0 && (
+              <div className="calendar-message">
+                {t.noSearchResults}
               </div>
             )}
 
@@ -520,11 +667,12 @@ export default function Calendar() {
 
           {!loading &&
             !error &&
-            editions.length > 0 && (
+            filteredEditions.length >
+              0 && (
 
               <div className="edition-list">
 
-                {editions.map(
+                {filteredEditions.map(
                   (edition) => (
 
                     <div
@@ -556,7 +704,9 @@ export default function Calendar() {
                           )
                         }
                       >
-                        {t.readNewspaper}
+                        {
+                          t.readNewspaper
+                        }
                       </button>
 
                     </div>
@@ -575,7 +725,8 @@ export default function Calendar() {
       {/* FOOTER */}
 
       <footer className="calendar-footer">
-        ©️ {new Date().getFullYear()}{" "}
+        ©️{" "}
+        {new Date().getFullYear()}{" "}
         Shubhodayam Bharath
       </footer>
 
