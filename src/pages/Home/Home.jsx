@@ -30,6 +30,44 @@ export default function Home() {
     language === "te"
 
   // =========================================
+  // SEO
+  // =========================================
+
+  useEffect(() => {
+    document.title = isTelugu
+      ? "శుభోదయం భారత్ – దినపత్రిక"
+      : "Shubhodayam Bharath – Daily Telugu & English Newspaper"
+
+    const description = isTelugu
+      ? "శుభోదయం భారత్ – తాజా తెలుగు మరియు ఇంగ్లీష్ దినపత్రికను ఆన్‌లైన్‌లో చదవండి."
+      : "Shubhodayam Bharath – Read the latest Telugu and English daily newspaper online."
+
+    let metaDescription =
+      document.querySelector(
+        'meta[name="description"]'
+      )
+
+    if (!metaDescription) {
+      metaDescription =
+        document.createElement("meta")
+
+      metaDescription.setAttribute(
+        "name",
+        "description"
+      )
+
+      document.head.appendChild(
+        metaDescription
+      )
+    }
+
+    metaDescription.setAttribute(
+      "content",
+      description
+    )
+  }, [isTelugu])
+
+  // =========================================
   // LANGUAGE LISTENER
   // =========================================
 
@@ -77,7 +115,7 @@ export default function Home() {
   }, [language])
 
   // =========================================
-  // LOAD LATEST UPLOADED EDITION
+  // LOAD LATEST EDITION
   // =========================================
 
   useEffect(() => {
@@ -88,17 +126,6 @@ export default function Home() {
         setLoading(true)
         setError("")
 
-        /*
-         * IMPORTANT:
-         *
-         * Use created_at first.
-         *
-         * This means the Home page shows the
-         * edition that was uploaded most recently,
-         * instead of simply using the largest
-         * newspaper date.
-         */
-
         const {
           data,
           error: editionError,
@@ -106,7 +133,7 @@ export default function Home() {
           .from("editions")
           .select("*")
           .not("pdf_path", "is", null)
-          .order("created_at", {
+          .order("date", {
             ascending: false,
           })
           .limit(1)
@@ -134,7 +161,7 @@ export default function Home() {
         }
 
         console.log(
-          "HOME LATEST UPLOADED EDITION:",
+          "HOME LATEST EDITION:",
           data
         )
 

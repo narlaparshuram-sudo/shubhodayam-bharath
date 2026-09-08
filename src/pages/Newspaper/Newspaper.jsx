@@ -43,6 +43,52 @@ function Newspaper() {
   }, [])
 
   // ==========================================================
+  // SEO
+  // ==========================================================
+
+  useEffect(() => {
+    if (!date) {
+      document.title = isTelugu
+        ? "శుభోదయం భారత్ – వార్తాపత్రిక"
+        : "Shubhodayam Bharath – Newspaper"
+
+      return
+    }
+
+    document.title = isTelugu
+      ? `శుభోదయం భారత్ – ${date} వార్తాపత్రిక`
+      : `Shubhodayam Bharath – ${date} Newspaper`
+
+    const description = isTelugu
+      ? `${date} తేదీ శుభోదయం భారత్ తెలుగు మరియు ఇంగ్లీష్ దినపత్రిక సంచికను ఆన్‌లైన్‌లో చదవండి.`
+      : `Read the Shubhodayam Bharath Telugu and English daily newspaper edition for ${date} online.`
+
+    let metaDescription =
+      document.querySelector(
+        'meta[name="description"]'
+      )
+
+    if (!metaDescription) {
+      metaDescription =
+        document.createElement("meta")
+
+      metaDescription.setAttribute(
+        "name",
+        "description"
+      )
+
+      document.head.appendChild(
+        metaDescription
+      )
+    }
+
+    metaDescription.setAttribute(
+      "content",
+      description
+    )
+  }, [date, isTelugu])
+
+  // ==========================================================
   // LOAD ALL EDITIONS
   // ==========================================================
 
@@ -54,7 +100,11 @@ function Newspaper() {
         .order("date", { ascending: true })
 
       if (error) {
-        console.error("Editions navigation error:", error)
+        console.error(
+          "Editions navigation error:",
+          error
+        )
+
         setEditions([])
         return
       }
@@ -76,7 +126,10 @@ function Newspaper() {
         setError("")
         setEdition(null)
 
-        console.log("Loading newspaper date:", date)
+        console.log(
+          "Loading newspaper date:",
+          date
+        )
 
         if (!date) {
           setError(
@@ -98,8 +151,15 @@ function Newspaper() {
           .eq("date", date)
           .maybeSingle()
 
-        console.log("EDITION DATA:", data)
-        console.log("EDITION ERROR:", editionError)
+        console.log(
+          "EDITION DATA:",
+          data
+        )
+
+        console.log(
+          "EDITION ERROR:",
+          editionError
+        )
 
         if (editionError) {
           console.error(
@@ -137,7 +197,9 @@ function Newspaper() {
             data: publicUrlData,
           } = supabase.storage
             .from("newspapers")
-            .getPublicUrl(data.pdf_path)
+            .getPublicUrl(
+              data.pdf_path
+            )
 
           console.log(
             "PDF PATH:",
@@ -178,9 +240,10 @@ function Newspaper() {
   // FIND PREVIOUS / NEXT EDITION
   // ==========================================================
 
-  const currentIndex = editions.findIndex(
-    (item) => item.date === date
-  )
+  const currentIndex =
+    editions.findIndex(
+      (item) => item.date === date
+    )
 
   const previousEdition =
     currentIndex > 0
@@ -189,14 +252,18 @@ function Newspaper() {
 
   const nextEdition =
     currentIndex >= 0 &&
-    currentIndex < editions.length - 1
+    currentIndex <
+      editions.length - 1
       ? editions[currentIndex + 1]
       : null
 
   function goToEdition(targetDate) {
     if (!targetDate) return
 
-    navigate(`/newspaper/${targetDate}`)
+    navigate(
+      `/newspaper/${targetDate}`
+    )
+
     window.scrollTo({
       top: 0,
       behavior: "smooth",
@@ -213,9 +280,12 @@ function Newspaper() {
         <Header />
 
         <main className="home-main">
+
           <section className="calendar-page">
 
-            <div className="section-heading">
+            <div className="section-heading newspaper-loading">
+
+              <div className="loading-spinner"></div>
 
               <h2>
                 {isTelugu
@@ -232,6 +302,7 @@ function Newspaper() {
             </div>
 
           </section>
+
         </main>
       </>
     )
@@ -247,6 +318,7 @@ function Newspaper() {
         <Header />
 
         <main className="home-main">
+
           <section className="calendar-page">
 
             <div className="section-heading">
@@ -278,6 +350,7 @@ function Newspaper() {
             </div>
 
           </section>
+
         </main>
       </>
     )
@@ -310,7 +383,6 @@ function Newspaper() {
 
           </div>
 
-
           {/* ==================================================
               EDITION NAVIGATION
           ================================================== */}
@@ -335,7 +407,9 @@ function Newspaper() {
             <button
               type="button"
               onClick={() =>
-                goToEdition(previousEdition?.date)
+                goToEdition(
+                  previousEdition?.date
+                )
               }
               disabled={!previousEdition}
               style={{
@@ -343,15 +417,18 @@ function Newspaper() {
                 padding: "11px 14px",
                 borderRadius: "8px",
                 border: "1px solid #dfe5eb",
-                background: previousEdition
-                  ? "#123c69"
-                  : "#f1f5f9",
-                color: previousEdition
-                  ? "#ffffff"
-                  : "#9ca3af",
-                cursor: previousEdition
-                  ? "pointer"
-                  : "not-allowed",
+                background:
+                  previousEdition
+                    ? "#123c69"
+                    : "#f1f5f9",
+                color:
+                  previousEdition
+                    ? "#ffffff"
+                    : "#9ca3af",
+                cursor:
+                  previousEdition
+                    ? "pointer"
+                    : "not-allowed",
                 fontWeight: 700,
               }}
             >
@@ -359,7 +436,6 @@ function Newspaper() {
                 ? "← మునుపటి సంచిక"
                 : "← Previous Edition"}
             </button>
-
 
             {/* CURRENT DATE */}
 
@@ -369,6 +445,7 @@ function Newspaper() {
                 textAlign: "center",
               }}
             >
+
               <div
                 style={{
                   fontSize: "11px",
@@ -391,15 +468,17 @@ function Newspaper() {
               >
                 {date}
               </div>
-            </div>
 
+            </div>
 
             {/* NEXT */}
 
             <button
               type="button"
               onClick={() =>
-                goToEdition(nextEdition?.date)
+                goToEdition(
+                  nextEdition?.date
+                )
               }
               disabled={!nextEdition}
               style={{
@@ -407,15 +486,18 @@ function Newspaper() {
                 padding: "11px 14px",
                 borderRadius: "8px",
                 border: "1px solid #dfe5eb",
-                background: nextEdition
-                  ? "#167447"
-                  : "#f1f5f9",
-                color: nextEdition
-                  ? "#ffffff"
-                  : "#9ca3af",
-                cursor: nextEdition
-                  ? "pointer"
-                  : "not-allowed",
+                background:
+                  nextEdition
+                    ? "#167447"
+                    : "#f1f5f9",
+                color:
+                  nextEdition
+                    ? "#ffffff"
+                    : "#9ca3af",
+                cursor:
+                  nextEdition
+                    ? "pointer"
+                    : "not-allowed",
                 fontWeight: 700,
               }}
             >
@@ -425,7 +507,6 @@ function Newspaper() {
             </button>
 
           </div>
-
 
           {/* NEWSPAPER VIEWER */}
 

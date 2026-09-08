@@ -1,35 +1,95 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabase";
-import "../Calendar.css";
+import { useEffect, useMemo, useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { supabase } from "../../lib/supabase"
+import "../Calendar.css"
 
 export default function Calendar() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
-  const today = new Date();
+  const today = new Date()
 
-  // Remember selected language
+  // =========================================
+  // LANGUAGE
+  // =========================================
+
   const [language, setLanguage] = useState(() => {
-    return localStorage.getItem("shubhodayam-language") || "en";
-  });
+    return (
+      localStorage.getItem(
+        "shubhodayam-language"
+      ) || "en"
+    )
+  })
 
   const [currentMonth, setCurrentMonth] = useState(
-    new Date(today.getFullYear(), today.getMonth(), 1)
-  );
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    )
+  )
 
-  const [editions, setEditions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [editions, setEditions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
   // Search editions
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState("")
 
-  // Save language selection
+  // =========================================
+  // SEO
+  // =========================================
+
+  const isTelugu = language === "te"
+
   useEffect(() => {
-    localStorage.setItem("shubhodayam-language", language);
-  }, [language]);
+    document.title = isTelugu
+      ? "శుభోదయం భారత్ – వార్తాపత్రిక క్యాలెండర్"
+      : "Shubhodayam Bharath – Newspaper Calendar"
 
-  // Translations
+    const description = isTelugu
+      ? "శుభోదయం భారత్ వార్తాపత్రిక క్యాలెండర్ ద్వారా మునుపటి మరియు తాజా దినపత్రిక సంచికలను తేదీ వారీగా చదవండి."
+      : "Browse and read Shubhodayam Bharath Telugu and English newspaper editions by date."
+
+    let metaDescription =
+      document.querySelector(
+        'meta[name="description"]'
+      )
+
+    if (!metaDescription) {
+      metaDescription =
+        document.createElement("meta")
+
+      metaDescription.setAttribute(
+        "name",
+        "description"
+      )
+
+      document.head.appendChild(
+        metaDescription
+      )
+    }
+
+    metaDescription.setAttribute(
+      "content",
+      description
+    )
+  }, [isTelugu])
+
+  // =========================================
+  // SAVE LANGUAGE
+  // =========================================
+
+  useEffect(() => {
+    localStorage.setItem(
+      "shubhodayam-language",
+      language
+    )
+  }, [language])
+
+  // =========================================
+  // TRANSLATIONS
+  // =========================================
+
   const text = {
     en: {
       tagline: "Your Daily Newspaper",
@@ -38,6 +98,7 @@ export default function Calendar() {
       read: "Read Newspaper",
 
       title: "Newspaper Calendar",
+
       description:
         "Select a date to read the Shubhodayam Bharath edition.",
 
@@ -59,10 +120,12 @@ export default function Calendar() {
       unavailable: "Not available",
 
       availableEditions: "Available Editions",
+
       edition: "edition",
       editions: "editions",
 
-      loading: "Loading newspaper editions...",
+      loading:
+        "Loading newspaper editions...",
 
       noEditions:
         "No newspaper editions are available yet.",
@@ -70,24 +133,34 @@ export default function Calendar() {
       noSearchResults:
         "No editions found for your search.",
 
-      readNewspaper: "Read Newspaper",
+      readNewspaper:
+        "Read Newspaper",
 
-      unavailableTitle: "Newspaper not available",
+      unavailableTitle:
+        "Newspaper not available",
 
       error:
         "Unable to load newspaper editions.",
 
-      searchPlaceholder: "Search by date...",
-      searchLabel: "Search newspaper by date",
+      searchPlaceholder:
+        "Search by date...",
+
+      searchLabel:
+        "Search newspaper by date",
     },
 
     te: {
       tagline: "మీ దినపత్రిక",
+
       home: "హోమ్",
+
       calendar: "క్యాలెండర్",
+
       read: "వార్తాపత్రిక చదవండి",
 
-      title: "వార్తాపత్రిక క్యాలెండర్",
+      title:
+        "వార్తాపత్రిక క్యాలెండర్",
+
       description:
         "శుభోదయం భారత్ సంచికను చదవడానికి తేదీని ఎంచుకోండి.",
 
@@ -103,13 +176,20 @@ export default function Calendar() {
         "శని",
       ],
 
-      newspaper: "వార్తాపత్రిక",
+      newspaper:
+        "వార్తాపత్రిక",
 
-      available: "వార్తాపత్రిక అందుబాటులో ఉంది",
-      unavailable: "అందుబాటులో లేదు",
+      available:
+        "వార్తాపత్రిక అందుబాటులో ఉంది",
 
-      availableEditions: "అందుబాటులో ఉన్న సంచికలు",
+      unavailable:
+        "అందుబాటులో లేదు",
+
+      availableEditions:
+        "అందుబాటులో ఉన్న సంచికలు",
+
       edition: "సంచిక",
+
       editions: "సంచికలు",
 
       loading:
@@ -121,7 +201,8 @@ export default function Calendar() {
       noSearchResults:
         "మీ శోధనకు సంచికలు కనుగొనబడలేదు.",
 
-      readNewspaper: "వార్తాపత్రిక చదవండి",
+      readNewspaper:
+        "వార్తాపత్రిక చదవండి",
 
       unavailableTitle:
         "వార్తాపత్రిక అందుబాటులో లేదు",
@@ -135,105 +216,138 @@ export default function Calendar() {
       searchLabel:
         "వార్తాపత్రిక తేదీని వెతకండి",
     },
-  };
+  }
 
-  const t = text[language];
+  const t =
+    text[language] || text.en
 
-  // Load all newspaper editions
+  // =========================================
+  // LOAD EDITIONS
+  // =========================================
+
   useEffect(() => {
     async function loadEditions() {
-      setLoading(true);
-      setError("");
+      setLoading(true)
+      setError("")
 
       const { data, error } = await supabase
         .from("editions")
         .select("*")
-        .order("date", { ascending: false });
+        .not("pdf_path", "is", null)
+        .order("date", {
+          ascending: false,
+        })
 
       if (error) {
-        console.error("Calendar error:", error);
-        setError(t.error);
-        setEditions([]);
+        console.error(
+          "Calendar error:",
+          error
+        )
+
+        setError(t.error)
+        setEditions([])
       } else {
-        setEditions(data || []);
+        setEditions(data || [])
       }
 
-      setLoading(false);
+      setLoading(false)
     }
 
-    loadEditions();
-  }, []);
+    loadEditions()
+  }, [])
 
-  // Convert database dates into lookup object
+  // =========================================
+  // EDITION DATE LOOKUP
+  // =========================================
+
   const editionDates = useMemo(() => {
-    const map = {};
+    const map = {}
 
     editions.forEach((edition) => {
       if (edition.date) {
-        map[edition.date] = edition;
+        map[edition.date] = edition
       }
-    });
+    })
 
-    return map;
-  }, [editions]);
+    return map
+  }, [editions])
 
-  // Filter editions using search
+  // =========================================
+  // SEARCH
+  // =========================================
+
   const filteredEditions = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const term =
+      searchTerm
+        .trim()
+        .toLowerCase()
 
     if (!term) {
-      return editions;
+      return editions
     }
 
-    return editions.filter((edition) => {
-      const date = String(
-        edition.date || ""
-      ).toLowerCase();
+    return editions.filter(
+      (edition) => {
+        const date = String(
+          edition.date || ""
+        ).toLowerCase()
 
-      const title = String(
-        edition.title || ""
-      ).toLowerCase();
+        const title = String(
+          edition.title || ""
+        ).toLowerCase()
 
-      return (
-        date.includes(term) ||
-        title.includes(term)
-      );
-    });
-  }, [editions, searchTerm]);
+        return (
+          date.includes(term) ||
+          title.includes(term)
+        )
+      }
+    )
+  }, [editions, searchTerm])
 
-  // Calendar information
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth();
+  // =========================================
+  // CALENDAR
+  // =========================================
+
+  const year =
+    currentMonth.getFullYear()
+
+  const month =
+    currentMonth.getMonth()
 
   const firstDay = new Date(
     year,
     month,
     1
-  ).getDay();
+  ).getDay()
 
   const daysInMonth = new Date(
     year,
     month + 1,
     0
-  ).getDate();
+  ).getDate()
 
-  const calendarDays = [];
+  const calendarDays = []
 
-  // Empty spaces before first day
-  for (let i = 0; i < firstDay; i++) {
-    calendarDays.push(null);
+  for (
+    let i = 0;
+    i < firstDay;
+    i++
+  ) {
+    calendarDays.push(null)
   }
 
-  // Actual days
   for (
     let day = 1;
     day <= daysInMonth;
     day++
   ) {
-    calendarDays.push(day);
+    calendarDays.push(day)
   }
 
-  // Month name
+  // =========================================
+  // MONTH NAME
+  // =========================================
+
   const monthName =
     currentMonth.toLocaleString(
       language === "te"
@@ -242,9 +356,12 @@ export default function Calendar() {
       {
         month: "long",
       }
-    );
+    )
 
-  // Previous month
+  // =========================================
+  // MONTH NAVIGATION
+  // =========================================
+
   function previousMonth() {
     setCurrentMonth(
       new Date(
@@ -252,23 +369,24 @@ export default function Calendar() {
         month - 1,
         1
       )
-    );
+    )
   }
 
-  // Next month
   function nextMonth() {
     const currentYear =
-      today.getFullYear();
+      today.getFullYear()
 
     const currentMonth =
-      today.getMonth();
+      today.getMonth()
 
     if (
       year > currentYear ||
-      (year === currentYear &&
-        month >= currentMonth)
+      (
+        year === currentYear &&
+        month >= currentMonth
+      )
     ) {
-      return;
+      return
     }
 
     setCurrentMonth(
@@ -277,10 +395,9 @@ export default function Calendar() {
         month + 1,
         1
       )
-    );
+    )
   }
 
-  // Go to current month
   function goToToday() {
     setCurrentMonth(
       new Date(
@@ -288,26 +405,36 @@ export default function Calendar() {
         today.getMonth(),
         1
       )
-    );
+    )
   }
 
-  // Format YYYY-MM-DD
+  // =========================================
+  // FORMAT DATE
+  // =========================================
+
   function formatDate(day) {
     return `${year}-${String(
       month + 1
     ).padStart(2, "0")}-${String(
       day
-    ).padStart(2, "0")}`;
+    ).padStart(2, "0")}`
   }
 
-  // Open newspaper
+  // =========================================
+  // OPEN NEWSPAPER
+  // =========================================
+
   function openEdition(date) {
     if (editionDates[date]) {
       navigate(
         `/newspaper/${date}`
-      );
+      )
     }
   }
+
+  // =========================================
+  // PAGE
+  // =========================================
 
   return (
     <div className="calendar-page">
@@ -352,7 +479,7 @@ export default function Calendar() {
             </Link>
           )}
 
-          {/* LANGUAGE SWITCHER */}
+          {/* LANGUAGE */}
 
           <div className="language-switcher">
 
@@ -396,9 +523,13 @@ export default function Calendar() {
 
       <main className="calendar-main">
 
+        {/* TITLE */}
+
         <div className="calendar-title-section">
 
-          <h1>{t.title}</h1>
+          <h1>
+            {t.title}
+          </h1>
 
           <p>
             {t.description}
@@ -410,7 +541,7 @@ export default function Calendar() {
 
         <section className="calendar-card">
 
-          {/* CALENDAR TOOLBAR */}
+          {/* TOOLBAR */}
 
           <div className="calendar-toolbar">
 
@@ -460,7 +591,7 @@ export default function Calendar() {
 
           </div>
 
-          {/* WEEK NAMES */}
+          {/* WEEKDAYS */}
 
           <div className="calendar-weekdays">
 
@@ -474,7 +605,7 @@ export default function Calendar() {
 
           </div>
 
-          {/* CALENDAR GRID */}
+          {/* DAYS */}
 
           <div className="calendar-grid">
 
@@ -489,16 +620,16 @@ export default function Calendar() {
                       key={`empty-${index}`}
                       className="calendar-day empty"
                     />
-                  );
+                  )
                 }
 
                 const dateString =
-                  formatDate(day);
+                  formatDate(day)
 
                 const edition =
                   editionDates[
                     dateString
-                  ];
+                  ]
 
                 const isToday =
                   day ===
@@ -506,7 +637,7 @@ export default function Calendar() {
                   month ===
                     today.getMonth() &&
                   year ===
-                    today.getFullYear();
+                    today.getFullYear()
 
                 return (
                   <button
@@ -527,7 +658,7 @@ export default function Calendar() {
                       if (edition) {
                         openEdition(
                           dateString
-                        );
+                        )
                       }
                     }}
                     disabled={
@@ -551,7 +682,7 @@ export default function Calendar() {
                     )}
 
                   </button>
-                );
+                )
               }
             )}
 
@@ -607,6 +738,8 @@ export default function Calendar() {
 
           </div>
 
+          {/* HEADING */}
+
           <div className="section-heading">
 
             <h2>
@@ -615,7 +748,6 @@ export default function Calendar() {
 
             <span>
               {filteredEditions.length}{" "}
-
               {filteredEditions.length ===
               1
                 ? t.edition
@@ -725,11 +857,13 @@ export default function Calendar() {
       {/* FOOTER */}
 
       <footer className="calendar-footer">
+
         ©️{" "}
         {new Date().getFullYear()}{" "}
         Shubhodayam Bharath
+
       </footer>
 
     </div>
-  );
+  )
 }

@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
+
 import * as pdfjsLib from "pdfjs-dist"
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString()
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString()
 
 const PDFJS_VERSION = "6.2.108"
 
@@ -13,69 +20,187 @@ const PDFJS_WASM_URL =
 
 const LOGO_URL = "/logo.png"
 
-const MAX_RENDER_PIXELS = 12000000
-const MAX_RENDER_WIDTH = 3600
-const MAX_RENDER_HEIGHT = 7200
+/*
+ * =========================================================
+ * HIGH QUALITY PDF RENDER
+ * =========================================================
+ */
+
+const RENDER_SCALE = 2.5
+
+const MAX_RENDER_PIXELS = 24000000
+const MAX_RENDER_WIDTH = 5000
+const MAX_RENDER_HEIGHT = 9000
 
 const MIN_CROP_SIZE = 20
+
+/*
+ * Space around newspaper.
+ */
+
+const SIDE_PADDING = 18
 
 export default function CropEditor({
   pdfUrl,
   source: sourceProp,
   pdf,
+  pdfDocument,
   url,
   edition,
   isTelugu = false,
   onClose,
 }) {
+  /*
+   * =========================================================
+   * PDF SOURCE
+   * =========================================================
+   */
+
   const source =
     pdfUrl ||
     sourceProp ||
-    pdf ||
     url ||
     ""
 
-  const canvasRef = useRef(null)
-  const containerRef = useRef(null)
-  const pdfRef = useRef(null)
-  const renderTaskRef = useRef(null)
+  /*
+   * Reuse PDF already loaded by NewspaperViewer.
+   */
 
-  const [loading, setLoading] = useState(true)
-  const [rendering, setRendering] = useState(false)
-  const [error, setError] = useState("")
-
-  const [pageNumber, setPageNumber] = useState(1)
-  const [numPages, setNumPages] = useState(0)
+  const existingPdfDocument =
+    pdfDocument ||
+    (
+      pdf &&
+      typeof pdf === "object" &&
+      typeof pdf.getPage === "function"
+        ? pdf
+        : null
+    )
 
   /*
-   * Zoom is visual/CSS zoom.
-   * This keeps Android zoom fast and reliable.
+   * =========================================================
+   * REFS
+   * =========================================================
    */
-  const [zoom, setZoom] = useState(1)
 
-  const [selecting, setSelecting] = useState(false)
-  const [crop, setCrop] = useState(null)
-  const [dragStart, setDragStart] = useState(null)
+  const canvasRef =
+    useRef(null)
 
-  const [previewUrl, setPreviewUrl] = useState("")
-  const [working, setWorking] = useState(false)
-  const [message, setMessage] = useState("")
+  const containerRef =
+    useRef(null)
 
-  const [canvasSize, setCanvasSize] = useState({
-    width: 0,
-    height: 0,
-  })
+  const pdfRef =
+    useRef(null)
+
+  const renderTaskRef =
+    useRef(null)
+
+  /*
+   * TRUE = CropEditor loaded PDF.
+   *
+   * FALSE = NewspaperViewer owns PDF.
+   */
+
+  const ownsPdfRef =
+    useRef(false)
+
+  /*
+   * =========================================================
+   * STATE
+   * =========================================================
+   */
+
+  const [loading, setLoading] =
+    useState(true)
+
+  const [rendering, setRendering] =
+    useState(false)
+
+  const [error, setError] =
+    useState("")
+
+  const [pageNumber, setPageNumber] =
+    useState(1)
+
+  const [numPages, setNumPages] =
+    useState(0)
+
+  /*
+   * Visual zoom.
+   *
+   * At 1 the newspaper fits the available screen.
+   *
+   * Zoom does not re-render the PDF.
+   */
+
+  const [zoom, setZoom] =
+    useState(1)
+
+  const [selecting, setSelecting] =
+    useState(false)
+
+  /*
+   * Crop coordinates are stored in
+   * REAL high-resolution canvas pixels.
+   */
+
+  const [crop, setCrop] =
+    useState(null)
+
+  const [dragStart, setDragStart] =
+    useState(null)
+
+  const [previewUrl, setPreviewUrl] =
+    useState("")
+
+  const [working, setWorking] =
+    useState(false)
+
+  const [message, setMessage] =
+    useState("")
+
+  /*
+   * Actual high-resolution canvas dimensions.
+   */
+
+  const [canvasSize, setCanvasSize] =
+    useState({
+      width: 0,
+      height: 0,
+    })
+
+  /*
+   * Used to trigger recalculation when the
+   * mobile container changes size.
+   */
+
+  const [displayWidth, setDisplayWidth] =
+    useState(0)
+
+  /*
+   * =========================================================
+   * DATE
+   * =========================================================
+   */
 
   const date =
     edition?.date ||
     edition?.Date ||
-    new Date().toISOString().slice(0, 10)
+    new Date()
+      .toISOString()
+      .slice(0, 10)
+
+  /*
+   * =========================================================
+   * LANGUAGE TEXT
+   * =========================================================
+   */
 
   const text = isTelugu
     ? {
         crop: "క్రాప్",
         select: "ప్రాంతాన్ని ఎంచుకోండి",
-        selecting: "వార్త చుట్టూ డ్రాగ్ చేయండి",
+        selecting:
+          "వార్త చుట్టూ డ్రాగ్ చేయండి",
         cropAgain: "మళ్లీ క్రాప్",
         preview: "ప్రివ్యూ",
         download: "డౌన్‌లోడ్",
@@ -83,12 +208,14 @@ export default function CropEditor({
         previous: "మునుపటి",
         next: "తదుపరి",
         close: "మూసివేయి",
-        loading: "వార్తాపత్రిక లోడ్ అవుతోంది...",
+        loading:
+          "వార్తాపత్రిక లోడ్ అవుతోంది...",
       }
     : {
         crop: "Crop",
         select: "Select Area",
-        selecting: "Drag around the news",
+        selecting:
+          "Drag around the news",
         cropAgain: "Crop Again",
         preview: "Preview",
         download: "Download",
@@ -96,34 +223,69 @@ export default function CropEditor({
         previous: "Previous",
         next: "Next",
         close: "Close",
-        loading: "Loading newspaper...",
+        loading:
+          "Loading newspaper...",
       }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * LOAD PDF
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   useEffect(() => {
     let cancelled = false
 
     async function loadPdf() {
-      if (!source) {
-        setError("PDF source is missing.")
-        setLoading(false)
-        return
-      }
-
       try {
         setLoading(true)
         setError("")
         setMessage("")
 
-        const response = await fetch(source, {
-          credentials: "omit",
-          cache: "no-store",
-        })
+        /*
+         * ---------------------------------------------------
+         * REUSE ALREADY LOADED PDF
+         * ---------------------------------------------------
+         */
+
+        if (existingPdfDocument) {
+          ownsPdfRef.current = false
+
+          pdfRef.current =
+            existingPdfDocument
+
+          setNumPages(
+            existingPdfDocument.numPages
+          )
+
+          setPageNumber(1)
+
+          setLoading(false)
+
+          return
+        }
+
+        /*
+         * ---------------------------------------------------
+         * FALLBACK PDF LOAD
+         * ---------------------------------------------------
+         */
+
+        if (!source) {
+          setError(
+            "PDF source is missing."
+          )
+
+          setLoading(false)
+
+          return
+        }
+
+        const response =
+          await fetch(source, {
+            credentials: "omit",
+            cache: "no-store",
+          })
 
         if (!response.ok) {
           throw new Error(
@@ -134,17 +296,23 @@ export default function CropEditor({
         const arrayBuffer =
           await response.arrayBuffer()
 
-        if (cancelled) return
+        if (cancelled) {
+          return
+        }
 
         const loadingTask =
           pdfjsLib.getDocument({
-            data: new Uint8Array(arrayBuffer),
+            data: new Uint8Array(
+              arrayBuffer
+            ),
 
-            wasmUrl: PDFJS_WASM_URL,
+            wasmUrl:
+              PDFJS_WASM_URL,
 
             useWasm: true,
 
-            isImageDecoderSupported: false,
+            isImageDecoderSupported:
+              false,
 
             disableRange: true,
             disableStream: true,
@@ -154,26 +322,39 @@ export default function CropEditor({
 
             useWorkerFetch: true,
             useSystemFonts: true,
+
             disableFontFace: false,
 
             stopAtErrors: false,
 
             canvasMaxAreaInBytes:
-              32 * 1024 * 1024,
+              96 * 1024 * 1024,
           })
 
         const loadedPdf =
           await loadingTask.promise
 
         if (cancelled) {
-          await loadedPdf.destroy()
+          try {
+            await loadedPdf.destroy()
+          } catch {
+            // ignore
+          }
+
           return
         }
 
-        pdfRef.current = loadedPdf
+        ownsPdfRef.current = true
 
-        setNumPages(loadedPdf.numPages)
+        pdfRef.current =
+          loadedPdf
+
+        setNumPages(
+          loadedPdf.numPages
+        )
+
         setPageNumber(1)
+
         setLoading(false)
       } catch (err) {
         console.error(
@@ -185,6 +366,7 @@ export default function CropEditor({
           setError(
             "Unable to load the newspaper PDF."
           )
+
           setLoading(false)
         }
       }
@@ -192,462 +374,889 @@ export default function CropEditor({
 
     loadPdf()
 
+    /*
+     * -------------------------------------------------------
+     * CLEANUP
+     * -------------------------------------------------------
+     */
+
     return () => {
       cancelled = true
 
-      if (renderTaskRef.current) {
+      if (
+        renderTaskRef.current
+      ) {
         try {
           renderTaskRef.current.cancel()
         } catch {
           // ignore
         }
+
+        renderTaskRef.current =
+          null
       }
 
-      if (pdfRef.current) {
+      /*
+       * Only destroy PDFs loaded by CropEditor.
+       */
+
+      if (
+        pdfRef.current &&
+        ownsPdfRef.current
+      ) {
         try {
           pdfRef.current.destroy()
         } catch {
           // ignore
         }
-
-        pdfRef.current = null
       }
+
+      pdfRef.current =
+        null
+
+      ownsPdfRef.current =
+        false
     }
-  }, [source])
+  }, [
+    source,
+    existingPdfDocument,
+  ])
 
   /*
-   * ---------------------------------------------------------
-   * RENDER CURRENT PAGE
-   * ---------------------------------------------------------
+   * =========================================================
+   * WATCH MOBILE CONTAINER SIZE
+   * =========================================================
+   *
+   * Important for phones.
+   *
+   * Mobile browser UI can change the available
+   * width/height while the page is open.
+   *
+   * ResizeObserver detects those changes.
    */
 
-  const renderPage = useCallback(async () => {
-    const pdfDocument = pdfRef.current
-    const canvas = canvasRef.current
+  useEffect(() => {
+    const updateDisplaySize =
+      () => {
+        const container =
+          containerRef.current
 
-    if (!pdfDocument || !canvas) {
-      return
-    }
-
-    try {
-      setRendering(true)
-      setError("")
-
-      if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel()
-        } catch {
-          // ignore
+        if (!container) {
+          return
         }
-      }
 
-      const page =
-        await pdfDocument.getPage(pageNumber)
-
-      const baseViewport =
-        page.getViewport({
-          scale: 1,
-        })
-
-      /*
-       * Fixed render scale.
-       * Zoom is handled visually.
-       */
-      let scale = 1.35
-
-      let width =
-        baseViewport.width * scale
-
-      let height =
-        baseViewport.height * scale
-
-      const pixels =
-        width * height
-
-      if (pixels > MAX_RENDER_PIXELS) {
-        const factor =
-          Math.sqrt(
-            MAX_RENDER_PIXELS / pixels
+        const availableWidth =
+          Math.max(
+            100,
+            container.clientWidth -
+              SIDE_PADDING * 2
           )
 
-        scale *= factor
-
-        width =
-          baseViewport.width * scale
-
-        height =
-          baseViewport.height * scale
-      }
-
-      if (width > MAX_RENDER_WIDTH) {
-        const factor =
-          MAX_RENDER_WIDTH / width
-
-        scale *= factor
-
-        width =
-          baseViewport.width * scale
-
-        height =
-          baseViewport.height * scale
-      }
-
-      if (height > MAX_RENDER_HEIGHT) {
-        const factor =
-          MAX_RENDER_HEIGHT / height
-
-        scale *= factor
-
-        width =
-          baseViewport.width * scale
-
-        height =
-          baseViewport.height * scale
-      }
-
-      const viewport =
-        page.getViewport({
-          scale,
-        })
-
-      const context =
-        canvas.getContext("2d", {
-          alpha: false,
-        })
-
-      if (!context) {
-        throw new Error(
-          "Canvas is not supported."
+        setDisplayWidth(
+          availableWidth
         )
       }
 
-      canvas.width =
-        Math.floor(viewport.width)
+    updateDisplaySize()
 
-      canvas.height =
-        Math.floor(viewport.height)
+    window.addEventListener(
+      "resize",
+      updateDisplaySize
+    )
 
-      canvas.style.width =
-        `${Math.floor(viewport.width)}px`
+    let resizeObserver = null
 
-      canvas.style.height =
-        `${Math.floor(viewport.height)}px`
+    const container =
+      containerRef.current
 
-      setCanvasSize({
-        width: viewport.width,
-        height: viewport.height,
-      })
-
-      context.fillStyle = "#ffffff"
-
-      context.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      )
-
-      const renderTask =
-        page.render({
-          canvasContext: context,
-          viewport,
+    if (
+      container &&
+      typeof ResizeObserver !==
+        "undefined"
+    ) {
+      resizeObserver =
+        new ResizeObserver(() => {
+          updateDisplaySize()
         })
 
-      renderTaskRef.current =
-        renderTask
+      resizeObserver.observe(
+        container
+      )
+    }
 
-      await renderTask.promise
+    return () => {
+      window.removeEventListener(
+        "resize",
+        updateDisplaySize
+      )
 
-      if (renderTaskRef.current === renderTask) {
-        renderTaskRef.current = null
+      if (resizeObserver) {
+        resizeObserver.disconnect()
       }
+    }
+  }, [])
 
-      if (page.cleanup) {
-        page.cleanup()
+  /*
+   * =========================================================
+   * FIT NEWSPAPER TO SCREEN
+   * =========================================================
+   *
+   * THIS IS THE MOBILE FIX.
+   *
+   * The newspaper is fitted using BOTH:
+   *
+   * 1. Available width
+   * 2. Available height
+   *
+   * Whichever requires the smaller scale wins.
+   *
+   * Therefore the COMPLETE newspaper page fits
+   * inside the available mobile area.
+   */
+
+  const fitScale =
+    canvasSize.width > 0 &&
+    canvasSize.height > 0 &&
+    displayWidth > 0 &&
+    containerRef.current
+      ? Math.min(
+          1,
+
+          /*
+           * WIDTH FIT
+           */
+
+          displayWidth /
+            canvasSize.width,
+
+          /*
+           * HEIGHT FIT
+           *
+           * Container height is the actual
+           * newspaper viewing area between
+           * the header and bottom controls.
+           */
+
+          Math.max(
+            0.1,
+
+            (
+              containerRef.current
+                .clientHeight -
+              SIDE_PADDING * 2
+            ) /
+              canvasSize.height
+          )
+        )
+      : 1
+
+  /*
+   * =========================================================
+   * FITTED SIZE
+   * =========================================================
+   */
+
+  const fittedWidth =
+    canvasSize.width *
+    fitScale
+
+  const fittedHeight =
+    canvasSize.height *
+    fitScale
+
+  /*
+   * =========================================================
+   * ZOOMED DISPLAY SIZE
+   * =========================================================
+   */
+
+  const displayedWidth =
+    fittedWidth *
+    zoom
+
+  const displayedHeight =
+    fittedHeight *
+    zoom
+
+  /*
+   * =========================================================
+   * RENDER CURRENT PAGE
+   * =========================================================
+   */
+
+  const renderPage =
+    useCallback(
+      async () => {
+        const pdfDocument =
+          pdfRef.current
+
+        const canvas =
+          canvasRef.current
+
+        if (
+          !pdfDocument ||
+          !canvas
+        ) {
+          return
+        }
+
+        try {
+          setRendering(true)
+          setError("")
+
+          /*
+           * Cancel previous render.
+           */
+
+          if (
+            renderTaskRef.current
+          ) {
+            try {
+              renderTaskRef.current.cancel()
+            } catch {
+              // ignore
+            }
+
+            renderTaskRef.current =
+              null
+          }
+
+          /*
+           * Get current page.
+           */
+
+          const page =
+            await pdfDocument.getPage(
+              pageNumber
+            )
+
+          /*
+           * Base viewport.
+           */
+
+          const baseViewport =
+            page.getViewport({
+              scale: 1,
+            })
+
+          /*
+           * =================================================
+           * HIGH QUALITY SCALE
+           * =================================================
+           */
+
+          let scale =
+            RENDER_SCALE
+
+          let width =
+            baseViewport.width *
+            scale
+
+          let height =
+            baseViewport.height *
+            scale
+
+          let pixels =
+            width * height
+
+          /*
+           * Pixel limit.
+           */
+
+          if (
+            pixels >
+            MAX_RENDER_PIXELS
+          ) {
+            const factor =
+              Math.sqrt(
+                MAX_RENDER_PIXELS /
+                  pixels
+              )
+
+            scale *= factor
+
+            width =
+              baseViewport.width *
+              scale
+
+            height =
+              baseViewport.height *
+              scale
+          }
+
+          /*
+           * Width limit.
+           */
+
+          if (
+            width >
+            MAX_RENDER_WIDTH
+          ) {
+            const factor =
+              MAX_RENDER_WIDTH /
+              width
+
+            scale *= factor
+
+            width =
+              baseViewport.width *
+              scale
+
+            height =
+              baseViewport.height *
+              scale
+          }
+
+          /*
+           * Height limit.
+           */
+
+          if (
+            height >
+            MAX_RENDER_HEIGHT
+          ) {
+            const factor =
+              MAX_RENDER_HEIGHT /
+              height
+
+            scale *= factor
+
+            width =
+              baseViewport.width *
+              scale
+
+            height =
+              baseViewport.height *
+              scale
+          }
+
+          /*
+           * Final pixel safety check.
+           */
+
+          pixels =
+            width * height
+
+          if (
+            pixels >
+            MAX_RENDER_PIXELS
+          ) {
+            const factor =
+              Math.sqrt(
+                MAX_RENDER_PIXELS /
+                  pixels
+              )
+
+            scale *= factor
+          }
+
+          /*
+           * Final viewport.
+           */
+
+          const viewport =
+            page.getViewport({
+              scale,
+            })
+
+          /*
+           * Canvas.
+           */
+
+          const context =
+            canvas.getContext(
+              "2d",
+              {
+                alpha: false,
+              }
+            )
+
+          if (!context) {
+            throw new Error(
+              "Canvas is not supported."
+            )
+          }
+
+          /*
+           * REAL high-resolution pixel size.
+           */
+
+          canvas.width =
+            Math.floor(
+              viewport.width
+            )
+
+          canvas.height =
+            Math.floor(
+              viewport.height
+            )
+
+          /*
+           * Keep intrinsic CSS size equal
+           * to the real canvas size.
+           *
+           * The parent wrapper will scale
+           * it down for mobile.
+           */
+
+          canvas.style.width =
+            `${Math.floor(
+              viewport.width
+            )}px`
+
+          canvas.style.height =
+            `${Math.floor(
+              viewport.height
+            )}px`
+
+          setCanvasSize({
+            width:
+              viewport.width,
+            height:
+              viewport.height,
+          })
+
+          /*
+           * White background.
+           */
+
+          context.fillStyle =
+            "#ffffff"
+
+          context.fillRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          )
+
+          /*
+           * Render.
+           */
+
+          const renderTask =
+            page.render({
+              canvasContext:
+                context,
+              viewport,
+            })
+
+          renderTaskRef.current =
+            renderTask
+
+          await renderTask.promise
+
+          if (
+            renderTaskRef.current ===
+            renderTask
+          ) {
+            renderTaskRef.current =
+              null
+          }
+
+          if (page.cleanup) {
+            page.cleanup()
+          }
+
+          /*
+           * Reset selection when page changes.
+           */
+
+          setCrop(null)
+          setSelecting(false)
+          setDragStart(null)
+          setZoom(1)
+
+          setRendering(false)
+        } catch (err) {
+          if (
+            err?.name ===
+            "RenderingCancelledException"
+          ) {
+            return
+          }
+
+          console.error(
+            "CROP PAGE RENDER ERROR:",
+            err
+          )
+
+          setRendering(false)
+
+          setError(
+            "Unable to display this newspaper page."
+          )
+        }
+      },
+      [pageNumber]
+    )
+
+  /*
+   * =========================================================
+   * RENDER WHEN PDF READY
+   * =========================================================
+   */
+
+  useEffect(() => {
+    if (
+      !loading &&
+      pdfRef.current
+    ) {
+      renderPage()
+    }
+  }, [
+    loading,
+    renderPage,
+  ])
+
+  /*
+   * =========================================================
+   * PAGE NAVIGATION
+   * =========================================================
+   */
+
+  const clearPreview =
+    () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(
+          previewUrl
+        )
+
+        setPreviewUrl("")
       }
+    }
 
-      setRendering(false)
-    } catch (err) {
+  const resetSelection =
+    () => {
+      clearPreview()
+
+      setCrop(null)
+      setMessage("")
+      setSelecting(false)
+      setDragStart(null)
+    }
+
+  const goPrevious =
+    () => {
       if (
-        err?.name ===
-        "RenderingCancelledException"
+        pageNumber <= 1 ||
+        working
       ) {
         return
       }
 
-      console.error(
-        "CROP PAGE RENDER ERROR:",
-        err
+      resetSelection()
+
+      setZoom(1)
+
+      setPageNumber(
+        (value) =>
+          value - 1
       )
 
-      setRendering(false)
-
-      setError(
-        "Unable to display this newspaper page."
+      containerRef.current?.scrollTo(
+        {
+          top: 0,
+          left: 0,
+          behavior: "smooth",
+        }
       )
     }
-  }, [pageNumber])
 
-  useEffect(() => {
-    if (!loading && pdfRef.current) {
-      renderPage()
-    }
-  }, [loading, renderPage])
+  const goNext =
+    () => {
+      if (
+        pageNumber >=
+          numPages ||
+        working
+      ) {
+        return
+      }
 
-  /*
-   * ---------------------------------------------------------
-   * PAGE CONTROLS
-   * ---------------------------------------------------------
-   */
+      resetSelection()
 
-  const goPrevious = () => {
-    if (pageNumber <= 1 || working) return
+      setZoom(1)
 
-    setCrop(null)
-    setPreviewUrl("")
-    setMessage("")
-    setPageNumber((value) => value - 1)
+      setPageNumber(
+        (value) =>
+          value + 1
+      )
 
-    setZoom(1)
-
-    containerRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    })
-  }
-
-  const goNext = () => {
-    if (
-      pageNumber >= numPages ||
-      working
-    ) {
-      return
+      containerRef.current?.scrollTo(
+        {
+          top: 0,
+          left: 0,
+          behavior: "smooth",
+        }
+      )
     }
 
-    setCrop(null)
-    setPreviewUrl("")
-    setMessage("")
-    setPageNumber((value) => value + 1)
-
-    setZoom(1)
-
-    containerRef.current?.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
-    })
-  }
-
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * ZOOM
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
-  const zoomIn = () => {
-    setZoom((value) => {
-      const next =
+  const zoomIn =
+    () => {
+      setZoom((value) =>
         Math.min(
           2.5,
           Math.round(
-            (value + 0.25) * 100
+            (value + 0.25) *
+              100
           ) / 100
         )
+      )
+    }
 
-      return next
-    })
-  }
-
-  const zoomOut = () => {
-    setZoom((value) => {
-      const next =
+  const zoomOut =
+    () => {
+      setZoom((value) =>
         Math.max(
           0.6,
           Math.round(
-            (value - 0.25) * 100
+            (value - 0.25) *
+              100
           ) / 100
         )
-
-      return next
-    })
-  }
+      )
+    }
 
   /*
-   * ---------------------------------------------------------
-   * CANVAS POINT
-   * ---------------------------------------------------------
+   * =========================================================
+   * GET REAL CANVAS POINT
+   * =========================================================
+   *
+   * Screen position -> high-resolution
+   * canvas position.
    */
 
-  const getCanvasPoint = (event) => {
-    const canvas =
-      canvasRef.current
+  const getCanvasPoint =
+    (event) => {
+      const canvas =
+        canvasRef.current
 
-    if (!canvas) {
+      if (!canvas) {
+        return {
+          x: 0,
+          y: 0,
+        }
+      }
+
+      const rect =
+        canvas.getBoundingClientRect()
+
+      /*
+       * IMPORTANT:
+       *
+       * rect is the ACTUAL displayed size
+       * after fitScale + zoom.
+       *
+       * Therefore this automatically converts
+       * the mobile screen coordinates back into
+       * the original high-resolution canvas.
+       */
+
+      const scaleX =
+        canvas.width /
+        rect.width
+
+      const scaleY =
+        canvas.height /
+        rect.height
+
+      let clientX = 0
+      let clientY = 0
+
+      if (
+        event.touches &&
+        event.touches.length >
+          0
+      ) {
+        clientX =
+          event.touches[0]
+            .clientX
+
+        clientY =
+          event.touches[0]
+            .clientY
+      } else {
+        clientX =
+          event.clientX
+
+        clientY =
+          event.clientY
+      }
+
+      const x =
+        (clientX -
+          rect.left) *
+        scaleX
+
+      const y =
+        (clientY -
+          rect.top) *
+        scaleY
+
       return {
-        x: 0,
-        y: 0,
+        x: Math.max(
+          0,
+          Math.min(
+            canvas.width,
+            x
+          )
+        ),
+
+        y: Math.max(
+          0,
+          Math.min(
+            canvas.height,
+            y
+          )
+        ),
       }
     }
 
-    const rect =
-      canvas.getBoundingClientRect()
-
-    const scaleX =
-      canvas.width / rect.width
-
-    const scaleY =
-      canvas.height / rect.height
-
-    let clientX
-    let clientY
-
-    if (
-      event.touches &&
-      event.touches.length > 0
-    ) {
-      clientX =
-        event.touches[0].clientX
-
-      clientY =
-        event.touches[0].clientY
-    } else {
-      clientX = event.clientX
-      clientY = event.clientY
-    }
-
-    const x =
-      (clientX - rect.left) *
-      scaleX
-
-    const y =
-      (clientY - rect.top) *
-      scaleY
-
-    return {
-      x: Math.max(
-        0,
-        Math.min(canvas.width, x)
-      ),
-      y: Math.max(
-        0,
-        Math.min(canvas.height, y)
-      ),
-    }
-  }
-
   /*
-   * ---------------------------------------------------------
-   * CROP SELECTION
-   * ---------------------------------------------------------
+   * =========================================================
+   * START SELECTING
+   * =========================================================
    */
 
-  const startSelecting = () => {
-    setCrop(null)
-    setPreviewUrl("")
-    setMessage("")
-    setSelecting(true)
-    setDragStart(null)
-  }
+  const startSelecting =
+    () => {
+      clearPreview()
 
-  const handlePointerDown = (event) => {
-    if (!selecting) return
-
-    event.preventDefault()
-
-    try {
-      event.currentTarget.setPointerCapture(
-        event.pointerId
-      )
-    } catch {
-      // ignore
-    }
-
-    const point =
-      getCanvasPoint(event)
-
-    setDragStart(point)
-
-    setCrop({
-      x: point.x,
-      y: point.y,
-      width: 0,
-      height: 0,
-    })
-  }
-
-  const handlePointerMove = (event) => {
-    if (
-      !selecting ||
-      !dragStart
-    ) {
-      return
-    }
-
-    event.preventDefault()
-
-    const point =
-      getCanvasPoint(event)
-
-    const x =
-      Math.min(
-        dragStart.x,
-        point.x
-      )
-
-    const y =
-      Math.min(
-        dragStart.y,
-        point.y
-      )
-
-    const width =
-      Math.abs(
-        point.x -
-          dragStart.x
-      )
-
-    const height =
-      Math.abs(
-        point.y -
-          dragStart.y
-      )
-
-    setCrop({
-      x,
-      y,
-      width,
-      height,
-    })
-  }
-
-  const finishSelecting = () => {
-    if (
-      !selecting ||
-      !crop
-    ) {
-      return
-    }
-
-    setSelecting(false)
-    setDragStart(null)
-
-    if (
-      crop.width < MIN_CROP_SIZE ||
-      crop.height < MIN_CROP_SIZE
-    ) {
       setCrop(null)
-
-      setMessage(
-        "Please select a larger area."
-      )
+      setMessage("")
+      setSelecting(true)
+      setDragStart(null)
     }
-  }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
+   * POINTER DOWN
+   * =========================================================
+   */
+
+  const handlePointerDown =
+    (event) => {
+      if (!selecting) {
+        return
+      }
+
+      event.preventDefault()
+
+      try {
+        event.currentTarget.setPointerCapture(
+          event.pointerId
+        )
+      } catch {
+        // ignore
+      }
+
+      const point =
+        getCanvasPoint(event)
+
+      setDragStart(point)
+
+      setCrop({
+        x: point.x,
+        y: point.y,
+        width: 0,
+        height: 0,
+      })
+    }
+
+  /*
+   * =========================================================
+   * POINTER MOVE
+   * =========================================================
+   */
+
+  const handlePointerMove =
+    (event) => {
+      if (
+        !selecting ||
+        !dragStart
+      ) {
+        return
+      }
+
+      event.preventDefault()
+
+      const point =
+        getCanvasPoint(event)
+
+      const x =
+        Math.min(
+          dragStart.x,
+          point.x
+        )
+
+      const y =
+        Math.min(
+          dragStart.y,
+          point.y
+        )
+
+      const width =
+        Math.abs(
+          point.x -
+            dragStart.x
+        )
+
+      const height =
+        Math.abs(
+          point.y -
+            dragStart.y
+        )
+
+      setCrop({
+        x,
+        y,
+        width,
+        height,
+      })
+    }
+
+  /*
+   * =========================================================
+   * FINISH SELECTING
+   * =========================================================
+   */
+
+  const finishSelecting =
+    () => {
+      if (
+        !selecting ||
+        !crop
+      ) {
+        return
+      }
+
+      setSelecting(false)
+      setDragStart(null)
+
+      if (
+        crop.width <
+          MIN_CROP_SIZE ||
+        crop.height <
+          MIN_CROP_SIZE
+      ) {
+        setCrop(null)
+
+        setMessage(
+          "Please select a larger area."
+        )
+      }
+    }
+
+  /*
+   * =========================================================
    * CREATE CROPPED IMAGE
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   const createCroppedImage =
@@ -656,7 +1265,10 @@ export default function CropEditor({
         const canvas =
           canvasRef.current
 
-        if (!canvas || !crop) {
+        if (
+          !canvas ||
+          !crop
+        ) {
           throw new Error(
             "Please select an area first."
           )
@@ -672,6 +1284,12 @@ export default function CropEditor({
             "Selected area is too small."
           )
         }
+
+        /*
+         * ---------------------------------------------------
+         * LOAD LOGO
+         * ---------------------------------------------------
+         */
 
         const logo =
           new Image()
@@ -693,6 +1311,12 @@ export default function CropEditor({
             }
           )
 
+        /*
+         * ---------------------------------------------------
+         * OUTPUT SETTINGS
+         * ---------------------------------------------------
+         */
+
         const padding = 30
 
         const logoHeight =
@@ -710,11 +1334,21 @@ export default function CropEditor({
         const logoWidth =
           logoLoaded &&
           logo.naturalWidth >
+            0 &&
+          logo.naturalHeight >
             0
             ? logo.naturalWidth *
-              (logoHeight /
-                logo.naturalHeight)
+              (
+                logoHeight /
+                logo.naturalHeight
+              )
             : 0
+
+        /*
+         * ---------------------------------------------------
+         * OUTPUT CANVAS
+         * ---------------------------------------------------
+         */
 
         const output =
           document.createElement(
@@ -732,9 +1366,11 @@ export default function CropEditor({
             crop.height +
               padding * 2 +
               logoHeight +
-              (logoLoaded
-                ? 20
-                : 0)
+              (
+                logoLoaded
+                  ? 20
+                  : 0
+              )
           )
 
         const ctx =
@@ -751,6 +1387,10 @@ export default function CropEditor({
           )
         }
 
+        /*
+         * White background.
+         */
+
         ctx.fillStyle =
           "#ffffff"
 
@@ -762,16 +1402,20 @@ export default function CropEditor({
         )
 
         /*
-         * Logo
+         * ---------------------------------------------------
+         * SHUBHODAYAM BHARATH MASTHEAD
+         * ---------------------------------------------------
          */
+
         if (
           logoLoaded &&
           logoWidth > 0
         ) {
           const logoX =
-            (output.width -
-              logoWidth) /
-            2
+            (
+              output.width -
+              logoWidth
+            ) / 2
 
           const logoY =
             padding
@@ -786,14 +1430,29 @@ export default function CropEditor({
         }
 
         /*
-         * Newspaper
+         * ---------------------------------------------------
+         * NEWSPAPER CROP
+         * ---------------------------------------------------
          */
+
         const newspaperY =
           padding +
           logoHeight +
-          (logoLoaded
-            ? 20
-            : 0)
+          (
+            logoLoaded
+              ? 20
+              : 0
+          )
+
+        /*
+         * IMPORTANT:
+         *
+         * Crop directly from the REAL
+         * high-resolution canvas.
+         *
+         * Screen fitting does not reduce
+         * crop quality.
+         */
 
         ctx.drawImage(
           canvas,
@@ -807,8 +1466,17 @@ export default function CropEditor({
           crop.height
         )
 
+        /*
+         * ---------------------------------------------------
+         * PNG
+         * ---------------------------------------------------
+         */
+
         return await new Promise(
-          (resolve, reject) => {
+          (
+            resolve,
+            reject
+          ) => {
             output.toBlob(
               (blob) => {
                 if (blob) {
@@ -821,8 +1489,7 @@ export default function CropEditor({
                   )
                 }
               },
-              "image/png",
-              1
+              "image/png"
             )
           }
         )
@@ -831,9 +1498,9 @@ export default function CropEditor({
     )
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * PREVIEW
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   const handlePreview =
@@ -879,9 +1546,9 @@ export default function CropEditor({
     }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * DOWNLOAD
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   const handleDownload =
@@ -901,6 +1568,10 @@ export default function CropEditor({
             blob
           )
 
+        /*
+         * iOS detection.
+         */
+
         const isIOS =
           /iPad|iPhone|iPod/.test(
             navigator.userAgent
@@ -911,6 +1582,10 @@ export default function CropEditor({
             navigator.maxTouchPoints >
               1
           )
+
+        /*
+         * iPhone / iPad.
+         */
 
         if (isIOS) {
           const opened =
@@ -939,14 +1614,21 @@ export default function CropEditor({
           return
         }
 
+        /*
+         * Android / desktop.
+         */
+
         const link =
           document.createElement(
             "a"
           )
 
-        link.href = blobUrl
+        link.href =
+          blobUrl
+
         link.download =
           fileName
+
         link.rel =
           "noopener"
 
@@ -990,29 +1672,21 @@ export default function CropEditor({
     }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * SHARE
-   * ---------------------------------------------------------
+   * =========================================================
    *
-   * IMPORTANT:
+   * YOUR WORKING NATIVE IMAGE SHARE.
    *
-   * We ONLY use the native Web Share API.
-   *
-   * We DO NOT:
-   * - open the image
-   * - open a preview
-   * - use window.open()
-   * - use blob URL fallback
-   * - use text-only sharing
-   *
-   * If the browser supports image sharing,
-   * the device's native share sheet opens.
+   * DO NOT CHANGE TO URL SHARE.
    */
 
   const handleShare =
     async () => {
       try {
-        if (working) return
+        if (working) {
+          return
+        }
 
         setWorking(true)
         setMessage("")
@@ -1035,6 +1709,7 @@ export default function CropEditor({
         /*
          * Browser does not support Web Share.
          */
+
         if (
           typeof navigator.share !==
           "function"
@@ -1049,21 +1724,24 @@ export default function CropEditor({
         }
 
         /*
-         * Check file-sharing capability
-         * when the browser provides canShare.
+         * Check file-sharing capability.
          */
+
         if (
           typeof navigator.canShare ===
           "function"
         ) {
-          let canShareFiles = false
+          let canShareFiles =
+            false
 
           try {
             canShareFiles =
               navigator.canShare({
                 files: [file],
               })
-          } catch (canShareError) {
+          } catch (
+            canShareError
+          ) {
             console.warn(
               "CAN SHARE CHECK ERROR:",
               canShareError
@@ -1082,21 +1760,16 @@ export default function CropEditor({
         }
 
         /*
-         * Native device share sheet.
-         *
-         * Android:
-         * WhatsApp / Telegram / Facebook /
-         * Instagram / Messages / etc.
-         *
-         * iPhone:
-         * WhatsApp / Telegram / Messages /
-         * AirDrop / Save Image / etc.
+         * Native share sheet.
          */
+
         await navigator.share({
           title:
             "Shubhodayam Bharath",
+
           text:
             "Shubhodayam Bharath Newspaper",
+
           files: [file],
         })
 
@@ -1114,9 +1787,9 @@ export default function CropEditor({
         setWorking(false)
 
         /*
-         * User cancelled the native
-         * share sheet.
+         * User cancelled share.
          */
+
         if (
           err?.name ===
           "AbortError"
@@ -1125,9 +1798,6 @@ export default function CropEditor({
           return
         }
 
-        /*
-         * No preview fallback here.
-         */
         setMessage(
           "Unable to open the device share menu. Please open the website directly in Chrome on Android or Safari on iPhone."
         )
@@ -1135,24 +1805,35 @@ export default function CropEditor({
     }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * CROP AGAIN
-   * ---------------------------------------------------------
+   * =========================================================
+   *
+   * NO PDF DOWNLOAD.
+   * NO PDF RELOAD.
+   * NO getDocument().
+   *
+   * Uses the same high-resolution canvas.
    */
 
   const handleCropAgain =
     () => {
+      if (working) {
+        return
+      }
+
+      clearPreview()
+
       setCrop(null)
-      setPreviewUrl("")
       setMessage("")
       setSelecting(true)
       setDragStart(null)
     }
 
   /*
-   * ---------------------------------------------------------
-   * CLEAN PREVIEW
-   * ---------------------------------------------------------
+   * =========================================================
+   * PREVIEW URL CLEANUP
+   * =========================================================
    */
 
   useEffect(() => {
@@ -1166,9 +1847,9 @@ export default function CropEditor({
   }, [previewUrl])
 
   /*
-   * ---------------------------------------------------------
-   * LOADING
-   * ---------------------------------------------------------
+   * =========================================================
+   * LOADING SCREEN
+   * =========================================================
    */
 
   if (loading) {
@@ -1180,14 +1861,15 @@ export default function CropEditor({
           zIndex: 9999,
           background: "#111",
           color: "#fff",
+
           display: "flex",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
-          flexDirection:
-            "column",
+          alignItems: "center",
+          justifyContent: "center",
+
+          flexDirection: "column",
+
           gap: 14,
+
           padding: 20,
         }}
       >
@@ -1213,9 +1895,9 @@ export default function CropEditor({
   }
 
   /*
-   * ---------------------------------------------------------
-   * ERROR
-   * ---------------------------------------------------------
+   * =========================================================
+   * ERROR SCREEN
+   * =========================================================
    */
 
   if (error) {
@@ -1227,11 +1909,11 @@ export default function CropEditor({
           zIndex: 9999,
           background: "#111",
           color: "#fff",
+
           display: "flex",
-          alignItems:
-            "center",
-          justifyContent:
-            "center",
+          alignItems: "center",
+          justifyContent: "center",
+
           padding: 20,
         }}
       >
@@ -1239,8 +1921,7 @@ export default function CropEditor({
           style={{
             maxWidth: 500,
             width: "100%",
-            textAlign:
-              "center",
+            textAlign: "center",
           }}
         >
           <div
@@ -1267,8 +1948,10 @@ export default function CropEditor({
             style={{
               border: 0,
               borderRadius: 10,
+
               padding:
                 "12px 20px",
+
               cursor:
                 "pointer",
             }}
@@ -1281,71 +1964,106 @@ export default function CropEditor({
   }
 
   /*
-   * Crop overlay.
+   * =========================================================
+   * CROP OVERLAY
+   * =========================================================
+   *
+   * Crop is stored in high-resolution coordinates.
+   *
+   * Convert it to fitted display coordinates.
    */
 
   const cropStyle =
     crop
       ? {
-          position:
-            "absolute",
-          left: crop.x,
-          top: crop.y,
-          width: crop.width,
-          height: crop.height,
+          position: "absolute",
+
+          left:
+            crop.x *
+            fitScale,
+
+          top:
+            crop.y *
+            fitScale,
+
+          width:
+            crop.width *
+            fitScale,
+
+          height:
+            crop.height *
+            fitScale,
+
           border:
             "3px solid #ffffff",
+
           boxShadow:
             "0 0 0 99999px rgba(0,0,0,0.55)",
+
           pointerEvents:
             "none",
+
           zIndex: 10,
         }
       : null
 
   /*
-   * Outer wrapper reserves zoomed size.
+   * =========================================================
+   * MAIN UI
+   * =========================================================
    */
-
-  const zoomedWidth =
-    canvasSize.width *
-    zoom
-
-  const zoomedHeight =
-    canvasSize.height *
-    zoom
 
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
+
         zIndex: 9999,
+
         background: "#111",
         color: "#fff",
+
         display: "flex",
-        flexDirection:
-          "column",
+        flexDirection: "column",
+
         overflow: "hidden",
+
+        /*
+         * Helps mobile browsers calculate
+         * the viewport correctly.
+         */
+
+        height: "100dvh",
+        minHeight: 0,
       }}
     >
-      {/* HEADER */}
+      {/* ===================================================
+          HEADER
+          =================================================== */}
 
       <div
         style={{
           flexShrink: 0,
+
           minHeight: 58,
-          background:
-            "#181818",
+
+          background: "#181818",
+
           borderBottom:
             "1px solid #333",
+
           display: "flex",
+
           alignItems:
             "center",
+
           justifyContent:
             "space-between",
+
           padding:
             "8px 12px",
+
           gap: 8,
         }}
       >
@@ -1353,12 +2071,16 @@ export default function CropEditor({
           onClick={onClose}
           style={{
             border: 0,
-            background:
-              "#333",
+
+            background: "#333",
+
             color: "#fff",
+
             borderRadius: 8,
+
             padding:
               "9px 13px",
+
             cursor:
               "pointer",
           }}
@@ -1369,7 +2091,9 @@ export default function CropEditor({
         <div
           style={{
             fontWeight: 700,
+
             fontSize: 16,
+
             textAlign:
               "center",
           }}
@@ -1380,7 +2104,9 @@ export default function CropEditor({
         <div
           style={{
             fontSize: 13,
+
             opacity: 0.8,
+
             whiteSpace:
               "nowrap",
           }}
@@ -1389,97 +2115,177 @@ export default function CropEditor({
         </div>
       </div>
 
-      {/* NEWSPAPER */}
+      {/* ===================================================
+          NEWSPAPER AREA
+          =================================================== */}
 
       <div
         ref={containerRef}
         style={{
           flex: 1,
+
           minHeight: 0,
+
           overflow: "auto",
+
           WebkitOverflowScrolling:
             "touch",
+
           overscrollBehavior:
             "contain",
+
           background:
             "#2a2a2a",
-          padding: 18,
+
+          padding:
+            `${SIDE_PADDING}px`,
+
+          /*
+           * The controls remain outside this
+           * area, so clientHeight is the actual
+           * available newspaper area.
+           */
+
           touchAction:
             selecting
               ? "none"
               : "auto",
         }}
       >
+        {/* =================================================
+            PAGE HOLDER
+            ================================================= */}
+
         <div
           style={{
-            position:
-              "relative",
+            position: "relative",
+
             width:
-              zoomedWidth ||
+              displayedWidth ||
+              fittedWidth ||
               "max-content",
+
             height:
-              zoomedHeight ||
+              displayedHeight ||
+              fittedHeight ||
               "max-content",
+
             margin:
               "0 auto",
+
             lineHeight: 0,
+
+            /*
+             * Prevent flex/layout shrinking.
+             */
+
+            flexShrink: 0,
           }}
         >
-          {/* ZOOMED PAGE */}
+          {/* =================================================
+              FITTED + ZOOMED PAGE
+              ================================================= */}
 
           <div
             style={{
-              position:
-                "absolute",
+              position: "absolute",
+
               left: 0,
               top: 0,
+
               width:
-                canvasSize.width ||
+                fittedWidth ||
                 0,
+
               height:
-                canvasSize.height ||
+                fittedHeight ||
                 0,
+
+              /*
+               * First fit the high-resolution
+               * page to screen.
+               *
+               * Then apply user zoom.
+               */
+
               transform:
                 `scale(${zoom})`,
+
               transformOrigin:
                 "top left",
             }}
           >
+            {/* =================================================
+                HIGH RESOLUTION CANVAS
+                ================================================= */}
+
             <canvas
               ref={canvasRef}
+
               onPointerDown={
                 handlePointerDown
               }
+
               onPointerMove={
                 handlePointerMove
               }
+
               onPointerUp={
                 finishSelecting
               }
+
               onPointerCancel={
                 finishSelecting
               }
+
               style={{
-                display:
-                  "block",
-                background:
-                  "#fff",
+                display: "block",
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * This is the SCREEN size.
+                 *
+                 * The REAL pixel dimensions are
+                 * still canvas.width/canvas.height.
+                 */
+
+                width:
+                  fittedWidth
+                    ? `${fittedWidth}px`
+                    : "auto",
+
+                height:
+                  fittedHeight
+                    ? `${fittedHeight}px`
+                    : "auto",
+
                 maxWidth:
                   "none",
+
+                background:
+                  "#fff",
+
                 cursor:
                   selecting
                     ? "crosshair"
                     : "default",
+
                 touchAction:
                   selecting
                     ? "none"
                     : "auto",
+
                 userSelect:
                   selecting
                     ? "none"
                     : "auto",
               }}
             />
+
+            {/* =================================================
+                CROP SELECTION
+                ================================================= */}
 
             {crop && (
               <div
@@ -1489,18 +2295,27 @@ export default function CropEditor({
               />
             )}
 
+            {/* =================================================
+                RENDERING INDICATOR
+                ================================================= */}
+
             {rendering && (
               <div
                 style={{
                   position:
                     "absolute",
+
                   inset: 0,
+
                   display:
                     "flex",
+
                   alignItems:
                     "center",
+
                   justifyContent:
                     "center",
+
                   pointerEvents:
                     "none",
                 }}
@@ -1509,12 +2324,14 @@ export default function CropEditor({
                   style={{
                     background:
                       "rgba(0,0,0,0.7)",
+
                     padding:
                       "10px 15px",
+
                     borderRadius:
                       8,
-                    fontSize:
-                      13,
+
+                    fontSize: 13,
                   }}
                 >
                   Loading page...
@@ -1525,19 +2342,26 @@ export default function CropEditor({
         </div>
       </div>
 
-      {/* MESSAGE */}
+      {/* ===================================================
+          MESSAGE
+          =================================================== */}
 
       {message && (
         <div
           style={{
             flexShrink: 0,
+
             background:
               "#222",
+
             padding:
               "7px 12px",
+
             textAlign:
               "center",
+
             fontSize: 13,
+
             color:
               "#ddd",
           }}
@@ -1546,31 +2370,52 @@ export default function CropEditor({
         </div>
       )}
 
-      {/* CONTROLS */}
+      {/* ===================================================
+          CONTROLS
+          =================================================== */}
 
       <div
         style={{
           flexShrink: 0,
+
           background:
             "#181818",
+
           borderTop:
             "1px solid #333",
+
           padding:
             "8px 10px",
+
+          /*
+           * Keep controls above the mobile
+           * browser safe area.
+           */
+
+          paddingBottom:
+            "calc(8px + env(safe-area-inset-bottom))",
         }}
       >
-        {/* PAGE + ZOOM */}
+        {/* =================================================
+            PAGE + ZOOM
+            ================================================= */}
 
         <div
           style={{
             display:
               "flex",
+
             justifyContent:
               "center",
+
             alignItems:
               "center",
+
             gap: 7,
-            marginBottom: 8,
+
+            marginBottom:
+              8,
+
             flexWrap:
               "wrap",
           }}
@@ -1586,6 +2431,7 @@ export default function CropEditor({
             }
             style={{
               ...buttonStyle,
+
               opacity:
                 pageNumber <=
                 1
@@ -1593,7 +2439,10 @@ export default function CropEditor({
                   : 1,
             }}
           >
-            ← {text.previous}
+            ←{" "}
+            {
+              text.previous
+            }
           </button>
 
           <button
@@ -1602,15 +2451,20 @@ export default function CropEditor({
             }
             disabled={
               working ||
-              zoom <= 0.6
+              zoom <=
+                0.6
             }
             style={{
               ...buttonStyle,
+
               fontSize: 20,
+
               minWidth: 44,
               minHeight: 42,
+
               opacity:
-                zoom <= 0.6
+                zoom <=
+                0.6
                   ? 0.4
                   : 1,
             }}
@@ -1621,10 +2475,14 @@ export default function CropEditor({
           <div
             style={{
               minWidth: 60,
+
               textAlign:
                 "center",
+
               fontSize: 13,
-              fontWeight: 600,
+
+              fontWeight:
+                600,
             }}
           >
             {Math.round(
@@ -1639,15 +2497,20 @@ export default function CropEditor({
             }
             disabled={
               working ||
-              zoom >= 2.5
+              zoom >=
+                2.5
             }
             style={{
               ...buttonStyle,
+
               fontSize: 20,
+
               minWidth: 44,
               minHeight: 42,
+
               opacity:
-                zoom >= 2.5
+                zoom >=
+                2.5
                   ? 0.4
                   : 1,
             }}
@@ -1666,6 +2529,7 @@ export default function CropEditor({
             }
             style={{
               ...buttonStyle,
+
               opacity:
                 pageNumber >=
                 numPages
@@ -1677,19 +2541,26 @@ export default function CropEditor({
           </button>
         </div>
 
-        {/* CROP ACTIONS */}
+        {/* =================================================
+            CROP ACTIONS
+            ================================================= */}
 
         <div
           style={{
             display:
               "flex",
+
             justifyContent:
               "center",
+
             gap: 8,
+
             flexWrap:
               "wrap",
           }}
         >
+          {/* SELECT AREA */}
+
           {!crop &&
             !selecting && (
               <button
@@ -1698,44 +2569,65 @@ export default function CropEditor({
                 }
                 style={{
                   ...buttonStyle,
+
                   background:
                     "#ffffff",
+
                   color:
                     "#111",
+
                   fontWeight:
                     700,
+
                   minWidth:
                     150,
                 }}
               >
-                ✂️ {text.select}
+                ✂️{" "}
+                {
+                  text.select
+                }
               </button>
             )}
+
+          {/* SELECTING */}
 
           {selecting && (
             <div
               style={{
                 background:
                   "#d97706",
+
                 color:
                   "#fff",
+
                 borderRadius:
                   8,
+
                 padding:
                   "10px 16px",
+
                 fontSize:
                   14,
+
                 fontWeight:
                   600,
               }}
             >
-              ✂️ {text.selecting}
+              ✂️{" "}
+              {
+                text.selecting
+              }
             </div>
           )}
+
+          {/* AFTER CROP */}
 
           {crop &&
             !selecting && (
               <>
+                {/* CROP AGAIN */}
+
                 <button
                   onClick={
                     handleCropAgain
@@ -1752,6 +2644,8 @@ export default function CropEditor({
                     text.cropAgain
                   }
                 </button>
+
+                {/* PREVIEW */}
 
                 <button
                   onClick={
@@ -1770,6 +2664,8 @@ export default function CropEditor({
                   }
                 </button>
 
+                {/* DOWNLOAD */}
+
                 <button
                   onClick={
                     handleDownload
@@ -1779,10 +2675,13 @@ export default function CropEditor({
                   }
                   style={{
                     ...buttonStyle,
+
                     background:
                       "#ffffff",
+
                     color:
                       "#111",
+
                     fontWeight:
                       700,
                   }}
@@ -1793,6 +2692,8 @@ export default function CropEditor({
                   }
                 </button>
 
+                {/* SHARE */}
+
                 <button
                   onClick={
                     handleShare
@@ -1802,23 +2703,30 @@ export default function CropEditor({
                   }
                   style={{
                     ...buttonStyle,
+
                     background:
                       "#2563eb",
+
                     color:
                       "#fff",
+
                     fontWeight:
                       700,
                   }}
                 >
                   📤{" "}
-                  {text.share}
+                  {
+                    text.share
+                  }
                 </button>
               </>
             )}
         </div>
       </div>
 
-      {/* PREVIEW */}
+      {/* ===================================================
+          PREVIEW MODAL
+          =================================================== */}
 
       {previewUrl && (
         <div
@@ -1828,16 +2736,23 @@ export default function CropEditor({
           style={{
             position:
               "fixed",
+
             inset: 0,
+
             zIndex: 10000,
+
             background:
               "rgba(0,0,0,0.88)",
+
             display:
               "flex",
+
             alignItems:
               "center",
+
             justifyContent:
               "center",
+
             padding: 20,
           }}
         >
@@ -1850,13 +2765,18 @@ export default function CropEditor({
             style={{
               maxWidth:
                 "95vw",
+
               maxHeight:
                 "90vh",
+
               overflow:
                 "auto",
+
               background:
                 "#fff",
+
               padding: 10,
+
               borderRadius:
                 10,
             }}
@@ -1869,25 +2789,36 @@ export default function CropEditor({
               style={{
                 display:
                   "block",
+
                 maxWidth:
                   "90vw",
+
                 maxHeight:
                   "80vh",
+
                 width:
                   "auto",
+
                 height:
                   "auto",
               }}
             />
 
+            {/* PREVIEW BUTTONS */}
+
             <div
               style={{
                 display:
                   "flex",
+
                 justifyContent:
                   "center",
+
                 gap: 8,
-                marginTop: 10,
+
+                marginTop:
+                  10,
+
                 flexWrap:
                   "wrap",
               }}
@@ -1901,8 +2832,10 @@ export default function CropEditor({
                 }
                 style={{
                   ...buttonStyle,
+
                   background:
                     "#111",
+
                   color:
                     "#fff",
                 }}
@@ -1922,26 +2855,30 @@ export default function CropEditor({
                 }
                 style={{
                   ...buttonStyle,
+
                   background:
                     "#2563eb",
+
                   color:
                     "#fff",
                 }}
               >
                 📤{" "}
-                {text.share}
+                {
+                  text.share
+                }
               </button>
 
               <button
                 onClick={() =>
-                  setPreviewUrl(
-                    ""
-                  )
+                  setPreviewUrl("")
                 }
                 style={{
                   ...buttonStyle,
+
                   background:
                     "#ddd",
+
                   color:
                     "#111",
                 }}
@@ -1955,23 +2892,32 @@ export default function CropEditor({
         </div>
       )}
 
-      {/* PROCESSING */}
+      {/* ===================================================
+          PROCESSING
+          =================================================== */}
 
       {working && (
         <div
           style={{
             position:
               "fixed",
+
             inset: 0,
+
             zIndex: 11000,
+
             background:
               "rgba(0,0,0,0.35)",
+
             display:
               "flex",
+
             alignItems:
               "center",
+
             justifyContent:
               "center",
+
             pointerEvents:
               "none",
           }}
@@ -1980,14 +2926,17 @@ export default function CropEditor({
             style={{
               background:
                 "#181818",
+
               color:
                 "#fff",
+
               borderRadius:
                 10,
+
               padding:
                 "12px 18px",
-              fontSize:
-                14,
+
+              fontSize: 14,
             }}
           >
             Processing...
@@ -1998,20 +2947,34 @@ export default function CropEditor({
   )
 }
 
+/*
+ * =========================================================
+ * BUTTON STYLE
+ * =========================================================
+ */
+
 const buttonStyle = {
   border:
     "1px solid #444",
+
   background:
     "#292929",
+
   color:
     "#fff",
+
   borderRadius: 8,
+
   padding:
     "9px 12px",
+
   cursor:
     "pointer",
+
   fontSize: 13,
+
   fontWeight: 500,
+
   WebkitTapHighlightColor:
     "transparent",
 }

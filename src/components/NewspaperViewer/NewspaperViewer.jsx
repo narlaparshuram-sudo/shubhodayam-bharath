@@ -1,236 +1,208 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import * as pdfjsLib from "pdfjs-dist"
-import { supabase } from "../../lib/supabase"
+import { useEffect, useRef, useState } from "react"
+import * as pdfjsLib from "pdfjs-dist/build/pdf.mjs"
+
 import CropEditor from "./CropEditor"
+
 import "./NewspaperViewer.css"
+
+// ==========================================================
+// PDF.JS WORKER
+// ==========================================================
 
 const PDFJS_VERSION = "6.2.108"
 
-const PDFJS_WASM_URL =
+const PDF_WORKER_URL =
+  `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`
+
+const PDF_WASM_URL =
   `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/wasm/`
 
-const MIN_ZOOM = 1
-const MAX_ZOOM = 4
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  PDF_WORKER_URL
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString()
+// ==========================================================
+// CONSTANTS
+// ==========================================================
+
+const MAX_RENDER_PIXELS = 24000000
+const MAX_RENDER_WIDTH = 5000
+const MAX_RENDER_HEIGHT = 9000
+
+const MIN_ZOOM = 0.6
+const MAX_ZOOM = 2.5
+
+const HIGH_QUALITY_SCALE = 2.5
+
+// ==========================================================
+// HELPER
+// ==========================================================
+
+function getPdfUrl(edition) {
+  if (!edition) {
+    return ""
+  }
+
+  return (
+    edition.pdf_url ||
+    edition.pdfUrl ||
+    edition.url ||
+    ""
+  )
+}
+
+// ==========================================================
+// COMPONENT
+// ==========================================================
 
 function NewspaperViewer({ edition }) {
+  const containerRef = useRef(null)
   const canvasRef = useRef(null)
+
   const pdfRef = useRef(null)
-  const loadingTaskRef = useRef(null)
   const renderTaskRef = useRef(null)
 
-  const pageContainerRef = useRef(null)
-  const pageSurfaceRef = useRef(null)
+  const [pdfDocument, setPdfDocument] =
+    useState(null)
 
-  const renderedSizeRef = useRef({
-    width: 0,
-    height: 0,
-  })
+  const [loading, setLoading] =
+    useState(true)
 
-  const baseDisplaySizeRef = useRef({
-    width: 0,
-    height: 0,
-  })
+  const [error, setError] =
+    useState("")
 
-  /*
-   * iPhone / Android touch state
-   */
-  const touchStateRef = useRef({
-    pinchActive: false,
-    startDistance: 0,
-    startZoom: 1,
-    startCenterX: 0,
-    startCenterY: 0,
-  })
+  const [currentPage, setCurrentPage] =
+    useState(1)
 
-  const panStateRef = useRef({
-    active: false,
-    startX: 0,
-    startY: 0,
-    startScrollLeft: 0,
-    startScrollTop: 0,
-  })
-
-  const [pdfUrl, setPdfUrl] = useState("")
-  const [pdf, setPdf] = useState(null)
-
-  const [showCrop, setShowCrop] = useState(false)
-
-  const [pageNumber, setPageNumber] = useState(1)
-  const [totalPages, setTotalPages] = useState(0)
-
-  const [pdfLoading, setPdfLoading] = useState(true)
-  const [rendering, setRendering] = useState(false)
-  const [pdfError, setPdfError] = useState("")
-
-  const [zoom, setZoom] = useState(1)
-
-  const [downloadPreparing, setDownloadPreparing] =
-    useState(false)
-
-  const [downloadProgress, setDownloadProgress] =
+  const [totalPages, setTotalPages] =
     useState(0)
 
-  /*
-   * ---------------------------------------------------------
-   * LANGUAGE
-   * ---------------------------------------------------------
-   */
+  const [zoom, setZoom] =
+    useState(1)
 
-  const [language, setLanguage] = useState(() => {
-    return (
-      localStorage.getItem("shubhodayam-language") ||
-      "english"
-    )
-  })
+  const [cropOpen, setCropOpen] =
+    useState(false)
 
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      setLanguage(
-        localStorage.getItem("shubhodayam-language") ||
-          "english"
-      )
-    }
+  const [containerSize, setContainerSize] =
+    useState({
+      width: 0,
+      height: 0,
+    })
 
-    window.addEventListener(
-      "shubhodayam-language-change",
-      handleLanguageChange
-    )
-
-    return () => {
-      window.removeEventListener(
-        "shubhodayam-language-change",
-        handleLanguageChange
-      )
-    }
-  }, [])
-
-  /*
-   * ---------------------------------------------------------
-   * GET PDF URL
-   * ---------------------------------------------------------
-   */
+  // ========================================================
+  // LOAD PDF
+  // ========================================================
 
   useEffect(() => {
-    if (!edition) {
-      setPdfUrl("")
-      return
-    }
-
-    if (edition.pdf_url) {
-      setPdfUrl(edition.pdf_url)
-      return
-    }
-
-    if (edition.pdf_path) {
-      const { data } = supabase.storage
-        .from("newspapers")
-        .getPublicUrl(edition.pdf_path)
-
-      setPdfUrl(data?.publicUrl || "")
-      return
-    }
-
-    setPdfUrl("")
-  }, [edition])
-
-  /*
-   * ---------------------------------------------------------
-   * LOAD PDF
-   * ---------------------------------------------------------
-   */
-
-  useEffect(() => {
-    if (!pdfUrl) {
-      setPdf(null)
-      setPdfLoading(false)
-      return
-    }
-
     let cancelled = false
+    let loadingTask = null
 
     async function loadPdf() {
       try {
-        setPdfLoading(true)
-        setPdfError("")
-        setPdf(null)
-
-        setPageNumber(1)
+        setLoading(true)
+        setError("")
+        setPdfDocument(null)
+        setCurrentPage(1)
         setTotalPages(0)
         setZoom(1)
 
-        if (loadingTaskRef.current) {
-          try {
-            await loadingTaskRef.current.destroy()
-          } catch {
-            // ignore
-          }
+        if (!edition) {
+          setError(
+            "Newspaper edition is not available."
+          )
 
-          loadingTaskRef.current = null
+          setLoading(false)
+          return
         }
 
-        const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
+        const pdfUrl =
+          getPdfUrl(edition)
 
-          wasmUrl: PDFJS_WASM_URL,
+        if (!pdfUrl) {
+          setError(
+            "The PDF for this edition has not been uploaded yet."
+          )
 
-          useWasm: true,
+          setLoading(false)
+          return
+        }
 
-          isImageDecoderSupported: false,
+        console.log(
+          "NEWSPAPER PDF URL:",
+          pdfUrl
+        )
 
-          disableRange: false,
-          disableStream: false,
-          disableAutoFetch: false,
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          PDF_WORKER_URL
 
-          rangeChunkSize: 1024 * 1024,
+        loadingTask =
+          pdfjsLib.getDocument({
+            url: pdfUrl,
 
-          withCredentials: false,
+            rangeChunkSize: 65536,
 
-          useWorkerFetch: true,
-          useSystemFonts: true,
+            disableAutoFetch: false,
 
-          disableFontFace: false,
+            disableStream: false,
 
-          stopAtErrors: false,
+            wasmUrl: PDF_WASM_URL,
 
-          canvasMaxAreaInBytes:
-            32 * 1024 * 1024,
-        })
+            httpHeaders: {},
 
-        loadingTaskRef.current = loadingTask
+            withCredentials: false,
+          })
 
-        const loadedPdf =
+        const pdf =
           await loadingTask.promise
 
         if (cancelled) {
+          if (
+            pdf &&
+            typeof pdf.destroy === "function"
+          ) {
+            try {
+              await pdf.destroy()
+            } catch {
+              // Ignore cleanup errors.
+            }
+          }
+
           return
         }
 
-        pdfRef.current = loadedPdf
+        console.log(
+          "PDF LOADED. TOTAL PAGES:",
+          pdf.numPages
+        )
 
-        setPdf(loadedPdf)
-        setTotalPages(loadedPdf.numPages)
-        setPageNumber(1)
-        setPdfLoading(false)
-      } catch (error) {
+        pdfRef.current = pdf
+
+        setPdfDocument(pdf)
+
+        setTotalPages(
+          pdf.numPages
+        )
+
+        setCurrentPage(1)
+
+        setLoading(false)
+      } catch (err) {
+        console.error(
+          "NEWSPAPER PDF LOAD ERROR:",
+          err
+        )
+
         if (cancelled) {
           return
         }
 
-        console.error(
-          "PDF LOAD ERROR:",
-          error
-        )
+        setPdfDocument(null)
 
-        setPdfError(
-          "Unable to load the newspaper PDF. Please try again."
-        )
+        setLoading(false)
 
-        setPdfLoading(false)
+        setError(
+          err?.message ||
+            "Unable to load the newspaper PDF."
+        )
       }
     }
 
@@ -239,203 +211,406 @@ function NewspaperViewer({ edition }) {
     return () => {
       cancelled = true
 
-      if (loadingTaskRef.current) {
-        try {
-          loadingTaskRef.current.destroy()
-        } catch {
-          // ignore
-        }
-
-        loadingTaskRef.current = null
-      }
-
-      pdfRef.current = null
-    }
-  }, [pdfUrl])
-
-  /*
-   * ---------------------------------------------------------
-   * APPLY DISPLAY SIZE
-   * ---------------------------------------------------------
-   */
-
-  const applyDisplaySize = useCallback(
-    (nextZoom) => {
-      const canvas = canvasRef.current
-      const surface = pageSurfaceRef.current
-
-      const base =
-        baseDisplaySizeRef.current
+      // ----------------------------------------------------
+      // Cancel active render
+      // ----------------------------------------------------
 
       if (
+        renderTaskRef.current
+      ) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch {
+          // Ignore render cleanup errors.
+        }
+
+        renderTaskRef.current = null
+      }
+
+      // ----------------------------------------------------
+      // Destroy old PDF safely
+      // ----------------------------------------------------
+
+      const oldPdf =
+        pdfRef.current
+
+      pdfRef.current = null
+
+      if (
+        oldPdf &&
+        typeof oldPdf.destroy ===
+          "function"
+      ) {
+        try {
+          const result =
+            oldPdf.destroy()
+
+          if (
+            result &&
+            typeof result.catch ===
+              "function"
+          ) {
+            result.catch(() => {})
+          }
+        } catch {
+          // Ignore PDF cleanup errors.
+        }
+      }
+
+      // ----------------------------------------------------
+      // Cancel loading task if possible
+      // ----------------------------------------------------
+
+      if (
+        loadingTask &&
+        typeof loadingTask.destroy ===
+          "function"
+      ) {
+        try {
+          loadingTask.destroy()
+        } catch {
+          // Ignore loading cleanup errors.
+        }
+      }
+    }
+  }, [edition])
+
+  // ========================================================
+  // WATCH CONTAINER SIZE
+  // ========================================================
+
+  useEffect(() => {
+    const element =
+      containerRef.current
+
+    if (!element) {
+      return
+    }
+
+    function updateSize() {
+      const rect =
+        element.getBoundingClientRect()
+
+      setContainerSize({
+        width: rect.width,
+        height: rect.height,
+      })
+    }
+
+    updateSize()
+
+    const resizeObserver =
+      new ResizeObserver(updateSize)
+
+    resizeObserver.observe(element)
+
+    window.addEventListener(
+      "resize",
+      updateSize
+    )
+
+    return () => {
+      resizeObserver.disconnect()
+
+      window.removeEventListener(
+        "resize",
+        updateSize
+      )
+    }
+  }, [])
+
+  // ========================================================
+  // CENTER CANVAS
+  // ========================================================
+
+  function centerCanvas() {
+    const container =
+      containerRef.current
+
+    const canvas =
+      canvasRef.current
+
+    if (!container || !canvas) {
+      return
+    }
+
+    const containerWidth =
+      container.clientWidth
+
+    const containerHeight =
+      container.clientHeight
+
+    const canvasWidth =
+      canvas.clientWidth
+
+    const canvasHeight =
+      canvas.clientHeight
+
+    const left =
+      Math.max(
+        0,
+        (containerWidth -
+          canvasWidth) /
+          2
+      )
+
+    const top =
+      Math.max(
+        0,
+        (containerHeight -
+          canvasHeight) /
+          2
+      )
+
+    canvas.style.marginLeft =
+      `${left}px`
+
+    canvas.style.marginTop =
+      `${top}px`
+  }
+
+  // ========================================================
+  // RENDER CURRENT PAGE
+  // ========================================================
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function renderPage() {
+      const pdf =
+        pdfRef.current
+
+      const canvas =
+        canvasRef.current
+
+      if (
+        !pdf ||
         !canvas ||
-        !surface ||
-        !base.width ||
-        !base.height
+        !totalPages
       ) {
         return
       }
 
-      const width =
-        base.width * nextZoom
-
-      const height =
-        base.height * nextZoom
-
-      canvas.style.width =
-        `${width}px`
-
-      canvas.style.height =
-        `${height}px`
-
-      canvas.style.maxWidth = "none"
-      canvas.style.display = "block"
-
-      surface.style.width =
-        `${width}px`
-
-      surface.style.height =
-        `${height}px`
-
-      surface.style.minWidth =
-        `${width}px`
-
-      surface.style.minHeight =
-        `${height}px`
-    },
-    []
-  )
-
-  /*
-   * ---------------------------------------------------------
-   * FIT PAGE
-   * ---------------------------------------------------------
-   */
-
-  const fitPageToFrame = useCallback(() => {
-    const canvas = canvasRef.current
-    const container =
-      pageContainerRef.current
-
-    const rendered =
-      renderedSizeRef.current
-
-    if (
-      !canvas ||
-      !container ||
-      !rendered.width ||
-      !rendered.height
-    ) {
-      return
-    }
-
-    const availableWidth =
-      Math.max(
-        100,
-        container.clientWidth - 24
-      )
-
-    const displayWidth =
-      Math.min(
-        rendered.width,
-        availableWidth
-      )
-
-    const ratio =
-      displayWidth /
-      rendered.width
-
-    const displayHeight =
-      rendered.height * ratio
-
-    baseDisplaySizeRef.current = {
-      width: displayWidth,
-      height: displayHeight,
-    }
-
-    setZoom(1)
-
-    applyDisplaySize(1)
-
-    container.scrollLeft = 0
-    container.scrollTop = 0
-  }, [applyDisplaySize])
-
-  /*
-   * ---------------------------------------------------------
-   * RENDER PAGE
-   * ---------------------------------------------------------
-   */
-
-  const renderPage = useCallback(
-    async (pageNum) => {
       if (
-        !pdfRef.current ||
-        !canvasRef.current
+        currentPage < 1 ||
+        currentPage > totalPages
       ) {
         return
       }
 
       try {
-        setRendering(true)
-        setPdfError("")
+        // --------------------------------------------------
+        // Cancel previous render
+        // --------------------------------------------------
 
-        if (renderTaskRef.current) {
+        if (
+          renderTaskRef.current
+        ) {
           try {
             renderTaskRef.current.cancel()
           } catch {
-            // ignore
+            // Ignore.
           }
 
           renderTaskRef.current = null
         }
 
+        // --------------------------------------------------
+        // Get page
+        // --------------------------------------------------
+
         const page =
-          await pdfRef.current.getPage(
-            pageNum
+          await pdf.getPage(
+            currentPage
           )
 
-        const renderScale = 1.35
+        if (cancelled) {
+          return
+        }
 
-        let viewport =
+        // --------------------------------------------------
+        // Base viewport
+        // --------------------------------------------------
+
+        const baseViewport =
+          page.getViewport({
+            scale: 1,
+          })
+
+        const pageWidth =
+          baseViewport.width
+
+        const pageHeight =
+          baseViewport.height
+
+        // --------------------------------------------------
+        // Available display area
+        // --------------------------------------------------
+
+        const availableWidth =
+          containerSize.width > 20
+            ? containerSize.width - 20
+            : window.innerWidth - 20
+
+        const availableHeight =
+          containerSize.height > 20
+            ? containerSize.height - 20
+            : window.innerHeight * 0.75
+
+        const widthScale =
+          availableWidth /
+          pageWidth
+
+        const heightScale =
+          availableHeight /
+          pageHeight
+
+        // --------------------------------------------------
+        // Fit entire newspaper page
+        // --------------------------------------------------
+
+        let fitScale =
+          Math.min(
+            widthScale,
+            heightScale
+          )
+
+        if (
+          !Number.isFinite(
+            fitScale
+          )
+        ) {
+          fitScale = 1
+        }
+
+        fitScale =
+          Math.max(
+            fitScale,
+            0.1
+          )
+
+        // --------------------------------------------------
+        // Visual scale
+        // --------------------------------------------------
+
+        const visualScale =
+          fitScale * zoom
+
+        // --------------------------------------------------
+        // High quality render scale
+        // --------------------------------------------------
+
+        let renderScale =
+          visualScale *
+          HIGH_QUALITY_SCALE
+
+        let renderWidth =
+          pageWidth *
+          renderScale
+
+        let renderHeight =
+          pageHeight *
+          renderScale
+
+        // --------------------------------------------------
+        // Maximum canvas pixels
+        // --------------------------------------------------
+
+        const totalPixels =
+          renderWidth *
+          renderHeight
+
+        if (
+          totalPixels >
+          MAX_RENDER_PIXELS
+        ) {
+          const reduction =
+            Math.sqrt(
+              MAX_RENDER_PIXELS /
+                totalPixels
+            )
+
+          renderScale *=
+            reduction
+
+          renderWidth =
+            pageWidth *
+            renderScale
+
+          renderHeight =
+            pageHeight *
+            renderScale
+        }
+
+        // --------------------------------------------------
+        // Maximum dimensions
+        // --------------------------------------------------
+
+        if (
+          renderWidth >
+          MAX_RENDER_WIDTH
+        ) {
+          renderScale *=
+            MAX_RENDER_WIDTH /
+            renderWidth
+        }
+
+        if (
+          renderHeight >
+          MAX_RENDER_HEIGHT
+        ) {
+          renderScale *=
+            MAX_RENDER_HEIGHT /
+            renderHeight
+        }
+
+        // --------------------------------------------------
+        // Display viewport
+        // --------------------------------------------------
+
+        const displayViewport =
+          page.getViewport({
+            scale: visualScale,
+          })
+
+        // --------------------------------------------------
+        // Render viewport
+        // --------------------------------------------------
+
+        const renderViewport =
           page.getViewport({
             scale: renderScale,
           })
 
-        const MAX_RENDER_WIDTH = 2600
-        const MAX_RENDER_HEIGHT = 3600
+        // --------------------------------------------------
+        // Canvas dimensions
+        // --------------------------------------------------
 
-        let finalScale =
-          renderScale
-
-        if (
-          viewport.width >
-            MAX_RENDER_WIDTH ||
-          viewport.height >
-            MAX_RENDER_HEIGHT
-        ) {
-          const widthScale =
-            MAX_RENDER_WIDTH /
-            viewport.width
-
-          const heightScale =
-            MAX_RENDER_HEIGHT /
-            viewport.height
-
-          finalScale =
-            Math.min(
-              widthScale,
-              heightScale
+        canvas.width =
+          Math.max(
+            1,
+            Math.floor(
+              renderViewport.width
             )
+          )
 
-          viewport =
-            page.getViewport({
-              scale: finalScale,
-            })
-        }
+        canvas.height =
+          Math.max(
+            1,
+            Math.floor(
+              renderViewport.height
+            )
+          )
 
-        const canvas =
-          canvasRef.current
+        canvas.style.width =
+          `${displayViewport.width}px`
+
+        canvas.style.height =
+          `${displayViewport.height}px`
+
+        // --------------------------------------------------
+        // Canvas context
+        // --------------------------------------------------
 
         const context =
           canvas.getContext(
@@ -445,19 +620,35 @@ function NewspaperViewer({ edition }) {
             }
           )
 
-        canvas.width =
-          Math.floor(viewport.width)
+        if (!context) {
+          throw new Error(
+            "Unable to create PDF canvas."
+          )
+        }
 
-        canvas.height =
-          Math.floor(viewport.height)
+        context.fillStyle =
+          "#ffffff"
 
-        canvas.style.maxWidth =
-          "none"
+        context.fillRect(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        )
+
+        // --------------------------------------------------
+        // Render
+        // --------------------------------------------------
 
         const renderTask =
           page.render({
-            canvasContext: context,
-            viewport,
+            canvasContext:
+              context,
+
+            viewport:
+              renderViewport,
+
+            intent: "display",
           })
 
         renderTaskRef.current =
@@ -465,916 +656,508 @@ function NewspaperViewer({ edition }) {
 
         await renderTask.promise
 
-        renderTaskRef.current = null
-
-        renderedSizeRef.current = {
-          width: canvas.width,
-          height: canvas.height,
+        if (cancelled) {
+          return
         }
 
-        requestAnimationFrame(() => {
-          fitPageToFrame()
-        })
+        renderTaskRef.current =
+          null
 
-        setRendering(false)
-      } catch (error) {
+        requestAnimationFrame(
+          () => {
+            if (!cancelled) {
+              centerCanvas()
+            }
+          }
+        )
+      } catch (err) {
         if (
-          error?.name ===
+          err?.name ===
           "RenderingCancelledException"
         ) {
           return
         }
 
         console.error(
-          "PDF RENDER ERROR:",
-          error
+          "PDF PAGE RENDER ERROR:",
+          err
         )
 
-        setPdfError(
-          "Unable to display this newspaper page."
-        )
-
-        setRendering(false)
+        if (!cancelled) {
+          setError(
+            err?.message ||
+              "Unable to display this newspaper page."
+          )
+        }
       }
-    },
-    [fitPageToFrame]
-  )
-
-  /*
-   * ---------------------------------------------------------
-   * RENDER PAGE WHEN NUMBER CHANGES
-   * ---------------------------------------------------------
-   */
-
-  useEffect(() => {
-    if (!pdf || !pageNumber) {
-      return
     }
 
-    renderPage(pageNumber)
+    renderPage()
+
+    return () => {
+      cancelled = true
+
+      if (
+        renderTaskRef.current
+      ) {
+        try {
+          renderTaskRef.current.cancel()
+        } catch {
+          // Ignore.
+        }
+
+        renderTaskRef.current = null
+      }
+    }
   }, [
-    pdf,
-    pageNumber,
-    renderPage,
+    pdfDocument,
+    currentPage,
+    zoom,
+    totalPages,
+    containerSize.width,
+    containerSize.height,
   ])
 
-  /*
-   * ---------------------------------------------------------
-   * SCREEN ROTATION / RESIZE
-   * ---------------------------------------------------------
-   */
+  // ========================================================
+  // PAGE NAVIGATION
+  // ========================================================
+
+  function previousPage() {
+    setCurrentPage(
+      (page) =>
+        Math.max(
+          1,
+          page - 1
+        )
+    )
+  }
+
+  function nextPage() {
+    setCurrentPage(
+      (page) =>
+        Math.min(
+          totalPages,
+          page + 1
+        )
+    )
+  }
+
+  // ========================================================
+  // KEYBOARD NAVIGATION
+  // ========================================================
 
   useEffect(() => {
-    let timer = null
+    function handleKeyDown(
+      event
+    ) {
+      if (cropOpen) {
+        return
+      }
 
-    const handleResize = () => {
-      clearTimeout(timer)
+      if (
+        event.key ===
+        "ArrowLeft"
+      ) {
+        previousPage()
+      }
 
-      timer = setTimeout(() => {
-        if (zoom === 1) {
-          fitPageToFrame()
-        }
-      }, 100)
+      if (
+        event.key ===
+        "ArrowRight"
+      ) {
+        nextPage()
+      }
     }
 
     window.addEventListener(
-      "resize",
-      handleResize
+      "keydown",
+      handleKeyDown
     )
 
     return () => {
-      clearTimeout(timer)
-
       window.removeEventListener(
-        "resize",
-        handleResize
+        "keydown",
+        handleKeyDown
       )
     }
   }, [
-    fitPageToFrame,
-    zoom,
+    cropOpen,
+    totalPages,
   ])
 
-  /*
-   * ---------------------------------------------------------
-   * ZOOM
-   * ---------------------------------------------------------
-   */
+  // ========================================================
+  // TOUCH PINCH ZOOM
+  // ========================================================
 
-  const applyZoom = useCallback(
-    (value) => {
-      const nextZoom =
-        Math.min(
-          MAX_ZOOM,
-          Math.max(
-            MIN_ZOOM,
-            value
-          )
-        )
+  const touchStartDistanceRef =
+    useRef(null)
 
-      setZoom(nextZoom)
+  const touchStartZoomRef =
+    useRef(1)
 
-      applyDisplaySize(nextZoom)
+  function getTouchDistance(
+    touch1,
+    touch2
+  ) {
+    const dx =
+      touch1.clientX -
+      touch2.clientX
 
-      /*
-       * When returning to 1x,
-       * put page back at the beginning.
-       */
-      if (nextZoom <= 1) {
-        const container =
-          pageContainerRef.current
+    const dy =
+      touch1.clientY -
+      touch2.clientY
 
-        if (container) {
-          container.scrollLeft = 0
-          container.scrollTop = 0
-        }
-      }
-    },
-    [applyDisplaySize]
-  )
-
-  /*
-   * ---------------------------------------------------------
-   * DISTANCE BETWEEN TWO TOUCHES
-   * ---------------------------------------------------------
-   */
-
-  const getTouchDistance = useCallback(
-    (touch1, touch2) => {
-      const dx =
-        touch1.clientX -
-        touch2.clientX
-
-      const dy =
-        touch1.clientY -
-        touch2.clientY
-
-      return Math.sqrt(
-        dx * dx + dy * dy
-      )
-    },
-    []
-  )
-
-  /*
-   * ---------------------------------------------------------
-   * TOUCH START
-   *
-   * iPhone uses native Touch Events here.
-   * ---------------------------------------------------------
-   */
-
-  const handleTouchStart =
-    useCallback(
-      (event) => {
-        const touches =
-          event.touches
-
-        const container =
-          pageContainerRef.current
-
-        if (!container) {
-          return
-        }
-
-        /*
-         * TWO FINGERS
-         */
-        if (touches.length === 2) {
-          const distance =
-            getTouchDistance(
-              touches[0],
-              touches[1]
-            )
-
-          touchStateRef.current = {
-            pinchActive: true,
-            startDistance: distance,
-            startZoom: zoom,
-            startCenterX:
-              (touches[0].clientX +
-                touches[1].clientX) /
-              2,
-            startCenterY:
-              (touches[0].clientY +
-                touches[1].clientY) /
-              2,
-          }
-
-          panStateRef.current.active =
-            false
-
-          /*
-           * Prevent iPhone Safari's
-           * native page gesture.
-           */
-          event.preventDefault()
-
-          return
-        }
-
-        /*
-         * ONE FINGER WHILE ZOOMED
-         */
-        if (
-          touches.length === 1 &&
-          zoom > 1
-        ) {
-          panStateRef.current = {
-            active: true,
-            startX:
-              touches[0].clientX,
-            startY:
-              touches[0].clientY,
-            startScrollLeft:
-              container.scrollLeft,
-            startScrollTop:
-              container.scrollTop,
-          }
-
-          event.preventDefault()
-        }
-      },
-      [
-        getTouchDistance,
-        zoom,
-      ]
+    return Math.sqrt(
+      dx * dx +
+        dy * dy
     )
-
-  /*
-   * ---------------------------------------------------------
-   * TOUCH MOVE
-   * ---------------------------------------------------------
-   */
-
-  const handleTouchMove =
-    useCallback(
-      (event) => {
-        const touches =
-          event.touches
-
-        const container =
-          pageContainerRef.current
-
-        if (!container) {
-          return
-        }
-
-        /*
-         * TWO FINGER PINCH
-         */
-        if (
-          touches.length === 2 &&
-          touchStateRef.current
-            .pinchActive
-        ) {
-          const distance =
-            getTouchDistance(
-              touches[0],
-              touches[1]
-            )
-
-          const startDistance =
-            touchStateRef.current
-              .startDistance
-
-          if (!startDistance) {
-            return
-          }
-
-          const scale =
-            distance /
-            startDistance
-
-          const nextZoom =
-            touchStateRef.current
-              .startZoom *
-            scale
-
-          applyZoom(nextZoom)
-
-          /*
-           * This is critical on iPhone.
-           * It prevents Safari from treating
-           * the gesture as browser zoom.
-           */
-          event.preventDefault()
-
-          return
-        }
-
-        /*
-         * ONE FINGER PAN WHEN ZOOMED
-         */
-        if (
-          touches.length === 1 &&
-          zoom > 1 &&
-          panStateRef.current.active
-        ) {
-          const state =
-            panStateRef.current
-
-          const deltaX =
-            touches[0].clientX -
-            state.startX
-
-          const deltaY =
-            touches[0].clientY -
-            state.startY
-
-          container.scrollLeft =
-            state.startScrollLeft -
-            deltaX
-
-          container.scrollTop =
-            state.startScrollTop -
-            deltaY
-
-          event.preventDefault()
-        }
-      },
-      [
-        applyZoom,
-        getTouchDistance,
-        zoom,
-      ]
-    )
-
-  /*
-   * ---------------------------------------------------------
-   * TOUCH END
-   * ---------------------------------------------------------
-   */
-
-  const handleTouchEnd =
-    useCallback(
-      (event) => {
-        if (
-          event.touches.length < 2
-        ) {
-          touchStateRef.current.pinchActive =
-            false
-        }
-
-        if (
-          event.touches.length === 0
-        ) {
-          panStateRef.current.active =
-            false
-        }
-      },
-      []
-    )
-
-  /*
-   * ---------------------------------------------------------
-   * DESKTOP CTRL + WHEEL ZOOM
-   * ---------------------------------------------------------
-   */
-
-  const handleWheel =
-    useCallback(
-      (event) => {
-        if (!event.ctrlKey) {
-          return
-        }
-
-        event.preventDefault()
-
-        const direction =
-          event.deltaY < 0
-            ? 1
-            : -1
-
-        const amount =
-          direction > 0
-            ? 0.15
-            : -0.15
-
-        applyZoom(
-          zoom + amount
-        )
-      },
-      [applyZoom, zoom]
-    )
-
-  /*
-   * ---------------------------------------------------------
-   * PREVIOUS PAGE
-   * ---------------------------------------------------------
-   */
-
-  const goPreviousPage =
-    useCallback(() => {
-      if (pageNumber <= 1) {
-        return
-      }
-
-      setPageNumber(
-        (current) =>
-          current - 1
-      )
-    }, [pageNumber])
-
-  /*
-   * ---------------------------------------------------------
-   * NEXT PAGE
-   * ---------------------------------------------------------
-   */
-
-  const goNextPage =
-    useCallback(() => {
-      if (
-        pageNumber >= totalPages
-      ) {
-        return
-      }
-
-      setPageNumber(
-        (current) =>
-          current + 1
-      )
-    }, [
-      pageNumber,
-      totalPages,
-    ])
-
-  /*
-   * ---------------------------------------------------------
-   * DOWNLOAD
-   * ---------------------------------------------------------
-   */
-
-  const handleDownload =
-    async () => {
-      if (
-        !pdfUrl ||
-        downloadPreparing
-      ) {
-        return
-      }
-
-      try {
-        setDownloadPreparing(true)
-        setDownloadProgress(0)
-
-        const response =
-          await fetch(pdfUrl)
-
-        if (!response.ok) {
-          throw new Error(
-            `Download failed: ${response.status}`
-          )
-        }
-
-        const contentLength =
-          response.headers.get(
-            "content-length"
-          )
-
-        const total =
-          contentLength
-            ? Number(contentLength)
-            : 0
-
-        if (!response.body) {
-          const blob =
-            await response.blob()
-
-          const blobUrl =
-            URL.createObjectURL(
-              blob
-            )
-
-          const link =
-            document.createElement(
-              "a"
-            )
-
-          link.href = blobUrl
-
-          link.download =
-            `${edition?.date || "newspaper"}.pdf`
-
-          document.body.appendChild(
-            link
-          )
-
-          link.click()
-          link.remove()
-
-          URL.revokeObjectURL(
-            blobUrl
-          )
-
-          setDownloadProgress(100)
-
-          return
-        }
-
-        const reader =
-          response.body.getReader()
-
-        const chunks = []
-
-        let received = 0
-
-        while (true) {
-          const { done, value } =
-            await reader.read()
-
-          if (done) {
-            break
-          }
-
-          chunks.push(value)
-
-          received += value.length
-
-          if (total > 0) {
-            setDownloadProgress(
-              Math.round(
-                (received /
-                  total) *
-                  100
-              )
-            )
-          }
-        }
-
-        const blob =
-          new Blob(chunks, {
-            type: "application/pdf",
-          })
-
-        const blobUrl =
-          URL.createObjectURL(
-            blob
-          )
-
-        const link =
-          document.createElement(
-            "a"
-          )
-
-        link.href = blobUrl
-
-        link.download =
-          `${edition?.date || "newspaper"}.pdf`
-
-        document.body.appendChild(
-          link
-        )
-
-        link.click()
-
-        link.remove()
-
-        URL.revokeObjectURL(
-          blobUrl
-        )
-
-        setDownloadProgress(100)
-      } catch (error) {
-        console.error(
-          "PDF DOWNLOAD ERROR:",
-          error
-        )
-
-        try {
-          window.open(
-            pdfUrl,
-            "_blank",
-            "noopener,noreferrer"
-          )
-        } catch {
-          // ignore
-        }
-      } finally {
-        setTimeout(() => {
-          setDownloadPreparing(false)
-          setDownloadProgress(0)
-        }, 500)
-      }
+  }
+
+  function handleTouchStart(
+    event
+  ) {
+    if (
+      event.touches.length !==
+      2
+    ) {
+      return
     }
 
-  /*
-   * ---------------------------------------------------------
-   * SHARE
-   * ---------------------------------------------------------
-   */
+    const distance =
+      getTouchDistance(
+        event.touches[0],
+        event.touches[1]
+      )
 
-  const handleShare =
-    async () => {
-      if (!pdfUrl) {
-        return
-      }
+    touchStartDistanceRef.current =
+      distance
 
-      const shareTitle =
-        edition?.title ||
-        "Shubhodayam Bharath"
+    touchStartZoomRef.current =
+      zoom
+  }
 
-      const shareText =
-        language === "telugu"
-          ? "శుభోదయం భారత్ - ఈరోజు వార్తాపత్రిక"
-          : "Shubhodayam Bharath - Daily Newspaper"
-
-      try {
-        if (
-          typeof navigator !==
-            "undefined" &&
-          typeof navigator.share ===
-            "function"
-        ) {
-          await navigator.share({
-            title: shareTitle,
-            text: shareText,
-            url: pdfUrl,
-          })
-
-          return
-        }
-
-        window.open(
-          pdfUrl,
-          "_blank",
-          "noopener,noreferrer"
-        )
-      } catch (error) {
-        if (
-          error?.name ===
-          "AbortError"
-        ) {
-          return
-        }
-
-        console.error(
-          "SHARE ERROR:",
-          error
-        )
-
-        window.open(
-          pdfUrl,
-          "_blank",
-          "noopener,noreferrer"
-        )
-      }
+  function handleTouchMove(
+    event
+  ) {
+    if (
+      event.touches.length !==
+      2
+    ) {
+      return
     }
 
-  /*
-   * ---------------------------------------------------------
-   * CROP
-   * ---------------------------------------------------------
-   */
+    const startDistance =
+      touchStartDistanceRef.current
 
-  if (showCrop) {
+    if (!startDistance) {
+      return
+    }
+
+    const currentDistance =
+      getTouchDistance(
+        event.touches[0],
+        event.touches[1]
+      )
+
+    if (!currentDistance) {
+      return
+    }
+
+    const ratio =
+      currentDistance /
+      startDistance
+
+    const newZoom =
+      touchStartZoomRef.current *
+      ratio
+
+    const clampedZoom =
+      Math.min(
+        MAX_ZOOM,
+        Math.max(
+          MIN_ZOOM,
+          newZoom
+        )
+      )
+
+    setZoom(
+      clampedZoom
+    )
+
+    event.preventDefault()
+  }
+
+  function handleTouchEnd() {
+    touchStartDistanceRef.current =
+      null
+  }
+
+  // ========================================================
+  // CROP
+  // ========================================================
+
+  function openCropEditor() {
+    if (!pdfDocument) {
+      return
+    }
+
+    setCropOpen(true)
+  }
+
+  function closeCropEditor() {
+    setCropOpen(false)
+  }
+
+  // ========================================================
+  // RESET VIEW
+  // ========================================================
+
+  function resetView() {
+    setZoom(1)
+
+    setCurrentPage(1)
+
+    requestAnimationFrame(
+      () => {
+        centerCanvas()
+      }
+    )
+  }
+
+  // ========================================================
+  // LOADING
+  // ========================================================
+
+  if (loading) {
+    return (
+      <section className="newspaper-viewer">
+        <div className="newspaper-viewer-loading">
+          <div className="newspaper-spinner"></div>
+
+          <h3>
+            Loading newspaper...
+          </h3>
+
+          <p>
+            Shubhodayam Bharath
+          </p>
+        </div>
+      </section>
+    )
+  }
+
+  // ========================================================
+  // ERROR
+  // ========================================================
+
+  if (error) {
+    return (
+      <section className="newspaper-viewer">
+        <div className="newspaper-viewer-error">
+          <div className="newspaper-error-icon">
+            !
+          </div>
+
+          <h3>
+            Unable to load newspaper
+          </h3>
+
+          <p>
+            {error}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              window.location.reload()
+            }
+            className="newspaper-retry-button"
+          >
+            Try Again
+          </button>
+        </div>
+      </section>
+    )
+  }
+
+  // ========================================================
+  // CROP EDITOR
+  // ========================================================
+
+  if (cropOpen) {
     return (
       <CropEditor
-        pdfUrl={pdfUrl}
+        pdfDocument={
+          pdfDocument
+        }
+        pdf={
+          pdfDocument
+        }
         edition={edition}
-        logoUrl="/logo.png"
-        onClose={() =>
-          setShowCrop(false)
+        pageNumber={
+          currentPage
+        }
+        onClose={
+          closeCropEditor
         }
       />
     )
   }
 
-  /*
-   * ---------------------------------------------------------
-   * NO EDITION
-   * ---------------------------------------------------------
-   */
-
-  if (!edition) {
-    return (
-      <div className="newspaper-viewer">
-        <div className="viewer-empty">
-          <h3>
-            {language === "telugu"
-              ? "వార్తాపత్రిక అందుబాటులో లేదు"
-              : "Newspaper not available"}
-          </h3>
-
-          <p>
-            {language === "telugu"
-              ? "ఈ తేదీకి వార్తాపత్రిక అందుబాటులో లేదు."
-              : "No newspaper edition is available for this date."}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * PDF NOT AVAILABLE
-   * ---------------------------------------------------------
-   */
-
-  if (!pdfUrl) {
-    return (
-      <div className="newspaper-viewer">
-        <div className="viewer-empty">
-          <h3>
-            {language === "telugu"
-              ? "PDF అందుబాటులో లేదు"
-              : "PDF not available"}
-          </h3>
-
-          <p>
-            {language === "telugu"
-              ? "ఈ ఎడిషన్ PDF ఇంకా అప్లోడ్ చేయలేదు."
-              : "The PDF for this edition has not been uploaded yet."}
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  /*
-   * ---------------------------------------------------------
-   * MAIN VIEW
-   * ---------------------------------------------------------
-   */
+  // ========================================================
+  // MAIN VIEWER
+  // ========================================================
 
   return (
-    <div className="newspaper-viewer">
+    <section
+      className="newspaper-viewer"
+      style={{
+        paddingBottom:
+          "max(16px, env(safe-area-inset-bottom))",
+      }}
+    >
+      {/* ====================================================
+          TOOLBAR
+      ==================================================== */}
 
-      {/* HEADER */}
-
-      <div className="viewer-header">
-        <p className="viewer-label">
-          {language === "telugu"
-            ? "రోజువారీ వార్తాపత్రిక"
-            : "Daily Newspaper"}
-        </p>
-
-        <h2>
-          {edition.title ||
-            "SHUBHODAYAM BHARATH"}
-        </h2>
-
-        <p className="viewer-date">
-          {edition.date}
-        </p>
-      </div>
-
-      {/* NEWSPAPER */}
-
-      <div className="newspaper-page-wrapper">
-
-        {/* PREVIOUS */}
-
+      <div className="newspaper-toolbar">
         <button
           type="button"
-          className="newspaper-nav-button newspaper-prev"
-          onClick={goPreviousPage}
-          disabled={
-            pageNumber <= 1 ||
-            pdfLoading ||
-            rendering
+          onClick={
+            previousPage
           }
+          disabled={
+            currentPage <= 1
+          }
+          className="viewer-nav-button"
           aria-label="Previous page"
         >
-          ‹
+          ←
         </button>
 
-        {/* PDF CONTAINER */}
+        <div className="viewer-page-info">
+          <span>
+            Page{" "}
+            {currentPage}
+          </span>
 
-        <div
-          ref={pageContainerRef}
-          className="viewer-pdf-container"
-          onWheel={handleWheel}
-          onTouchStart={
-            handleTouchStart
-          }
-          onTouchMove={
-            handleTouchMove
-          }
-          onTouchEnd={
-            handleTouchEnd
-          }
-          onTouchCancel={
-            handleTouchEnd
-          }
-        >
-          <div
-            ref={pageSurfaceRef}
-            className="viewer-page-surface"
-          >
-            <canvas
-              ref={canvasRef}
-              className="viewer-pdf-canvas"
-            />
-          </div>
+          <span className="viewer-page-separator">
+            /
+          </span>
 
-          {/* LOADING */}
-
-          {pdfLoading && (
-            <div className="viewer-loading-overlay">
-              <div className="viewer-loading-spinner" />
-
-              <p>
-                Loading newspaper...
-              </p>
-            </div>
-          )}
-
-          {/* RENDERING */}
-
-          {!pdfLoading &&
-            rendering && (
-              <div className="viewer-rendering-indicator">
-                Loading page...
-              </div>
-            )}
+          <span>
+            {totalPages}
+          </span>
         </div>
-
-        {/* NEXT */}
 
         <button
           type="button"
-          className="newspaper-nav-button newspaper-next"
-          onClick={goNextPage}
-          disabled={
-            pageNumber >=
-              totalPages ||
-            pdfLoading ||
-            rendering
+          onClick={
+            nextPage
           }
+          disabled={
+            currentPage >=
+            totalPages
+          }
+          className="viewer-nav-button"
           aria-label="Next page"
         >
-          ›
+          →
         </button>
-      </div>
-
-      {/* ERROR */}
-
-      {pdfError && (
-        <div className="viewer-error">
-          {pdfError}
-        </div>
-      )}
-
-      {/* PAGE INDICATOR */}
-
-      {!pdfLoading &&
-        totalPages > 0 && (
-          <div className="viewer-page-indicator">
-            Page {pageNumber} /{" "}
-            {totalPages}
-          </div>
-        )}
-
-      {/* ZOOM HINT */}
-
-      <p className="viewer-zoom-hint">
-        Pinch with two fingers to zoom
-      </p>
-
-      {/* ACTION BUTTONS */}
-
-      <div className="viewer-actions">
 
         <button
           type="button"
-          className="secondary-button"
           onClick={
-            handleDownload
+            openCropEditor
           }
           disabled={
-            pdfLoading ||
-            downloadPreparing
+            !pdfDocument
           }
-        >
-          {downloadPreparing
-            ? `Downloading ${downloadProgress}%`
-            : "Download PDF"}
-        </button>
-
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={handleShare}
-          disabled={pdfLoading}
-        >
-          Share
-        </button>
-
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() =>
-            setShowCrop(true)
-          }
-          disabled={pdfLoading}
+          className="viewer-crop-button"
         >
           Crop
         </button>
 
+        <button
+          type="button"
+          onClick={
+            resetView
+          }
+          className="viewer-reset-button"
+        >
+          Reset
+        </button>
       </div>
-    </div>
+
+      {/* ====================================================
+          PDF AREA
+      ==================================================== */}
+
+      <div
+        ref={
+          containerRef
+        }
+        className="newspaper-pdf-container"
+        onTouchStart={
+          handleTouchStart
+        }
+        onTouchMove={
+          handleTouchMove
+        }
+        onTouchEnd={
+          handleTouchEnd
+        }
+        onTouchCancel={
+          handleTouchEnd
+        }
+      >
+        <canvas
+          ref={
+            canvasRef
+          }
+          className="newspaper-pdf-canvas"
+        />
+      </div>
+
+      {/* ====================================================
+          BOTTOM PAGE NAVIGATION
+      ==================================================== */}
+
+      <div className="newspaper-bottom-navigation">
+        <button
+          type="button"
+          onClick={
+            previousPage
+          }
+          disabled={
+            currentPage <= 1
+          }
+          className="bottom-page-button"
+        >
+          ← Previous
+        </button>
+
+        <div className="bottom-page-number">
+          {currentPage}{" "}
+          /{" "}
+          {totalPages}
+        </div>
+
+        <button
+          type="button"
+          onClick={
+            nextPage
+          }
+          disabled={
+            currentPage >=
+            totalPages
+          }
+          className="bottom-page-button"
+        >
+          Next →
+        </button>
+      </div>
+    </section>
   )
 }
 

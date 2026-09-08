@@ -11,76 +11,355 @@
   box-sizing: border-box;
 }
 
-/* =========================================================
-   HEADER
-   ========================================================= */
-
-.viewer-header {
-  text-align: center;
-  padding: 24px 20px;
-  margin-bottom: 18px;
-  background: #ffffff;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-}
-
-.viewer-label {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1f8f4d;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-}
-
-.viewer-header h2 {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  font-weight: 800;
-  color: #111827;
-}
-
-.viewer-date {
-  margin: 8px 0 0;
-  font-size: 14px;
-  color: #6b7280;
-}
 
 /* =========================================================
-   NEWSPAPER PAGE AREA
+   LOADING
    ========================================================= */
 
-.newspaper-page-wrapper {
-  position: relative;
-  width: 100%;
+.newspaper-viewer-loading {
+  min-height: 420px;
+
   display: flex;
+  flex-direction: column;
+
   align-items: center;
   justify-content: center;
-  gap: 12px;
+
+  padding: 40px 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+
+  text-align: center;
+
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+.newspaper-viewer-loading h3 {
+  margin: 18px 0 6px;
+
+  color: #111827;
+
+  font-size: 20px;
+}
+
+.newspaper-viewer-loading p {
+  margin: 0;
+
+  color: #6b7280;
+
+  font-size: 14px;
+}
+
+.newspaper-spinner {
+  width: 42px;
+  height: 42px;
+
+  border: 4px solid #e5e7eb;
+
+  border-top-color: #1f8f4d;
+
+  border-radius: 50%;
+
+  animation:
+    newspaper-viewer-spin
+    0.8s linear infinite;
+}
+
+@keyframes newspaper-viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.newspaper-viewer-error {
+  min-height: 420px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  padding: 40px 20px;
+
+  background: #ffffff;
+
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+
+  text-align: center;
+
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.05);
+}
+
+.newspaper-error-icon {
+  width: 52px;
+  height: 52px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #fff1f2;
+
+  color: #b00020;
+
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.newspaper-viewer-error h3 {
+  margin: 16px 0 8px;
+
+  color: #991b1b;
+
+  font-size: 20px;
+}
+
+.newspaper-viewer-error p {
+  max-width: 700px;
+
+  margin: 0 0 20px;
+
+  color: #6b7280;
+
+  line-height: 1.6;
+
+  word-break: break-word;
+}
+
+.newspaper-retry-button {
+  min-height: 44px;
+
+  padding: 10px 20px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #1f8f4d;
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease;
+}
+
+.newspaper-retry-button:hover {
+  background: #18743e;
+
+  transform: translateY(-1px);
+}
+
+.newspaper-retry-button:active {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   TOOLBAR
+   ========================================================= */
+
+.newspaper-toolbar {
+  width: 100%;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  margin-bottom: 12px;
+
+  padding: 10px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+
+  border-radius: 12px;
+
+  box-shadow:
+    0 3px 14px rgba(0, 0, 0, 0.05);
+
   box-sizing: border-box;
 }
+
+.viewer-page-info {
+  min-width: 100px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 5px;
+
+  padding: 8px 10px;
+
+  color: #111827;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+.viewer-page-separator {
+  color: #9ca3af;
+}
+
+
+/* =========================================================
+   TOOLBAR BUTTONS
+   ========================================================= */
+
+.viewer-nav-button,
+.viewer-crop-button,
+.viewer-reset-button {
+  min-height: 42px;
+
+  border-radius: 8px;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.viewer-nav-button {
+  width: 44px;
+
+  border: 1px solid #dfe5eb;
+
+  background: #1f8f4d;
+
+  color: #ffffff;
+
+  font-size: 22px;
+  line-height: 1;
+}
+
+.viewer-nav-button:hover:not(:disabled) {
+  background: #18743e;
+
+  transform: translateY(-1px);
+}
+
+.viewer-nav-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.viewer-nav-button:disabled {
+  background: #eef1f4;
+
+  color: #9ca3af;
+
+  cursor: not-allowed;
+
+  opacity: 0.75;
+}
+
+.viewer-crop-button {
+  min-width: 76px;
+
+  padding: 8px 14px;
+
+  border: 1px solid #123c69;
+
+  background: #123c69;
+
+  color: #ffffff;
+}
+
+.viewer-crop-button:hover:not(:disabled) {
+  background: #0d2f52;
+
+  transform: translateY(-1px);
+}
+
+.viewer-crop-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.viewer-crop-button:disabled {
+  opacity: 0.5;
+
+  cursor: not-allowed;
+}
+
+.viewer-reset-button {
+  min-width: 76px;
+
+  padding: 8px 14px;
+
+  border: 1px solid #d1d5db;
+
+  background: #ffffff;
+
+  color: #374151;
+}
+
+.viewer-reset-button:hover {
+  background: #f3f4f6;
+
+  transform: translateY(-1px);
+}
+
+.viewer-reset-button:active {
+  transform: scale(0.97);
+}
+
 
 /* =========================================================
    PDF CONTAINER
    ========================================================= */
 
-.viewer-pdf-container {
+.newspaper-pdf-container {
   position: relative;
 
   width: 100%;
-  max-width: 1000px;
 
   height: 78vh;
+
   min-height: 500px;
 
   overflow: auto;
 
+  display: block;
+
   background: #e9eaec;
 
-  border-radius: 12px;
   border: 1px solid #d9dde2;
+
+  border-radius: 12px;
 
   box-shadow:
     0 6px 24px rgba(0, 0, 0, 0.08);
@@ -89,10 +368,6 @@
 
   -webkit-overflow-scrolling: touch;
 
-  /*
-     Allow normal finger scrolling.
-     Our pointer handlers take over when zoomed.
-  */
   touch-action: pan-x pan-y;
 
   overscroll-behavior: contain;
@@ -100,39 +375,12 @@
   scrollbar-width: thin;
 }
 
-/* =========================================================
-   PDF PAGE SURFACE
-   ========================================================= */
-
-.viewer-page-surface {
-  position: relative;
-
-  width: max-content;
-  min-width: 100%;
-
-  min-height: 100%;
-
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-
-  box-sizing: border-box;
-
-  padding: 14px;
-
-  transform-origin: top center;
-
-  will-change: transform;
-
-  user-select: none;
-  -webkit-user-select: none;
-}
 
 /* =========================================================
    PDF CANVAS
    ========================================================= */
 
-.viewer-pdf-canvas {
+.newspaper-pdf-canvas {
   display: block;
 
   width: auto;
@@ -140,296 +388,123 @@
 
   max-width: none;
 
-  margin: 0 auto;
-
   background: #ffffff;
 
   box-shadow:
     0 3px 15px rgba(0, 0, 0, 0.14);
 
   user-select: none;
+
   -webkit-user-select: none;
 
   -webkit-touch-callout: none;
+
+  flex-shrink: 0;
 }
 
+
 /* =========================================================
-   PREVIOUS / NEXT BUTTONS
+   BOTTOM NAVIGATION
    ========================================================= */
 
-.newspaper-nav-button {
-  flex: 0 0 auto;
-
-  width: 52px;
-  height: 72px;
-
-  border: none;
-  border-radius: 12px;
-
-  background: #1f8f4d;
-  color: #ffffff;
-
-  font-size: 46px;
-  line-height: 1;
+.newspaper-bottom-navigation {
+  width: 100%;
 
   display: flex;
+
   align-items: center;
   justify-content: center;
 
-  cursor: pointer;
+  gap: 12px;
 
-  box-shadow:
-    0 5px 16px rgba(0, 0, 0, 0.16);
+  margin-top: 12px;
 
-  transition:
-    transform 0.15s ease,
-    opacity 0.15s ease,
-    background 0.15s ease;
-
-  z-index: 5;
-
-  -webkit-tap-highlight-color: transparent;
-}
-
-.newspaper-nav-button:hover:not(:disabled) {
-  background: #18743e;
-  transform: scale(1.04);
-}
-
-.newspaper-nav-button:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-.newspaper-nav-button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-/* =========================================================
-   PAGE INDICATOR
-   ========================================================= */
-
-.viewer-page-indicator {
-  width: fit-content;
-
-  margin: 14px auto 0;
-
-  padding: 8px 18px;
-
-  border-radius: 20px;
+  padding: 10px;
 
   background: #ffffff;
 
   border: 1px solid #e5e7eb;
 
-  color: #111827;
-
-  font-size: 15px;
-  font-weight: 700;
+  border-radius: 12px;
 
   box-shadow:
-    0 3px 12px rgba(0, 0, 0, 0.06);
+    0 3px 14px rgba(0, 0, 0, 0.05);
+
+  box-sizing: border-box;
 }
 
-/* =========================================================
-   ZOOM HINT
-   ========================================================= */
+.bottom-page-button {
+  min-width: 120px;
 
-.viewer-zoom-hint {
-  margin: 8px auto 0;
+  min-height: 42px;
 
-  text-align: center;
+  padding: 9px 14px;
 
-  color: #6b7280;
+  border: 1px solid #1f8f4d;
 
-  font-size: 12px;
-  font-weight: 500;
-}
+  border-radius: 8px;
 
-/* =========================================================
-   RENDERING MESSAGE
-   ========================================================= */
-
-.pdf-rendering-message {
-  width: fit-content;
-
-  margin: 10px auto 0;
-
-  padding: 7px 14px;
-
-  border-radius: 18px;
-
-  background: rgba(17, 24, 39, 0.88);
+  background: #1f8f4d;
 
   color: #ffffff;
 
   font-size: 13px;
-  font-weight: 600;
-
-  text-align: center;
-}
-
-/* =========================================================
-   PDF PLACEHOLDER
-   ========================================================= */
-
-.pdf-placeholder {
-  min-height: 300px;
-
-  display: flex;
-  flex-direction: column;
-
-  align-items: center;
-  justify-content: center;
-
-  text-align: center;
-
-  padding: 30px;
-
-  box-sizing: border-box;
-}
-
-.pdf-placeholder h3 {
-  margin: 0 0 10px;
-
-  color: #111827;
-
-  font-size: 22px;
-}
-
-.pdf-placeholder p {
-  margin: 0;
-
-  max-width: 600px;
-
-  color: #6b7280;
-
-  line-height: 1.6;
-}
-
-/* =========================================================
-   ACTION BUTTONS
-   ========================================================= */
-
-.viewer-actions {
-  display: flex;
-
-  justify-content: center;
-  align-items: center;
-
-  gap: 12px;
-
-  flex-wrap: wrap;
-
-  padding: 20px 0 5px;
-}
-
-.viewer-actions button {
-  min-width: 120px;
-  min-height: 44px;
-
-  padding: 10px 20px;
-
-  border: none;
-  border-radius: 9px;
-
-  font-size: 14px;
   font-weight: 700;
 
   cursor: pointer;
 
   transition:
+    background 0.15s ease,
     transform 0.15s ease,
-    box-shadow 0.15s ease,
     opacity 0.15s ease;
-
-  -webkit-tap-highlight-color: transparent;
 }
 
-.viewer-actions button:hover:not(:disabled) {
-  transform: translateY(-1px);
-
-  box-shadow:
-    0 5px 14px rgba(0, 0, 0, 0.12);
-}
-
-.viewer-actions button:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.viewer-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-/* =========================================================
-   PRIMARY BUTTON
-   ========================================================= */
-
-.primary-button {
-  background: #1f8f4d;
-  color: #ffffff;
-}
-
-.primary-button:hover:not(:disabled) {
+.bottom-page-button:hover:not(:disabled) {
   background: #18743e;
+
+  transform: translateY(-1px);
 }
 
-/* =========================================================
-   SECONDARY BUTTON
-   ========================================================= */
-
-.secondary-button {
-  background: #111827;
-  color: #ffffff;
+.bottom-page-button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
-.secondary-button:hover:not(:disabled) {
-  background: #1f2937;
+.bottom-page-button:disabled {
+  background: #eef1f4;
+
+  border-color: #dfe5eb;
+
+  color: #9ca3af;
+
+  cursor: not-allowed;
 }
 
-/* =========================================================
-   EMPTY VIEWER
-   ========================================================= */
-
-.viewer-empty {
-  width: 100%;
-  max-width: 900px;
-
-  margin: 40px auto;
-
-  padding: 50px 25px;
-
-  box-sizing: border-box;
+.bottom-page-number {
+  min-width: 80px;
 
   text-align: center;
 
-  background: #ffffff;
-
-  border: 1px solid #e5e7eb;
-
-  border-radius: 16px;
-
-  box-shadow:
-    0 5px 20px rgba(0, 0, 0, 0.06);
-}
-
-.viewer-empty h2 {
-  margin: 0 0 12px;
-
   color: #111827;
 
-  font-size: 24px;
+  font-size: 14px;
+  font-weight: 800;
+
+  white-space: nowrap;
 }
 
-.viewer-empty p {
-  margin: 0;
 
-  color: #6b7280;
+/* =========================================================
+   GENERAL FOCUS
+   ========================================================= */
 
-  line-height: 1.6;
+.newspaper-toolbar button:focus-visible,
+.newspaper-bottom-navigation button:focus-visible,
+.newspaper-retry-button:focus-visible {
+  outline: 3px solid rgba(31, 143, 77, 0.25);
+
+  outline-offset: 2px;
 }
+
 
 /* =========================================================
    TABLET
@@ -441,25 +516,37 @@
     padding: 14px;
   }
 
-  .newspaper-page-wrapper {
-    gap: 7px;
-  }
-
-  .newspaper-nav-button {
-    width: 44px;
-    height: 62px;
-
-    border-radius: 10px;
-
-    font-size: 40px;
-  }
-
-  .viewer-pdf-container {
+  .newspaper-pdf-container {
     height: 76vh;
+
     min-height: 450px;
   }
 
+  .newspaper-toolbar {
+    gap: 6px;
+
+    padding: 8px;
+  }
+
+  .viewer-page-info {
+    min-width: 90px;
+
+    font-size: 13px;
+  }
+
+  .viewer-nav-button {
+    width: 42px;
+  }
+
+  .viewer-crop-button,
+  .viewer-reset-button {
+    min-width: 70px;
+
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
+
 
 /* =========================================================
    MOBILE
@@ -471,117 +558,89 @@
     padding: 8px;
   }
 
-  .viewer-header {
-    padding: 18px 12px;
+  .newspaper-toolbar {
+    gap: 5px;
 
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 
-    border-radius: 12px;
+    padding: 7px;
+
+    border-radius: 10px;
   }
 
-  .viewer-label {
-    font-size: 11px;
+  .viewer-nav-button {
+    width: 38px;
 
-    letter-spacing: 0.6px;
-  }
+    min-height: 40px;
 
-  .viewer-header h2 {
     font-size: 20px;
   }
 
-  .viewer-date {
-    margin-top: 6px;
+  .viewer-page-info {
+    min-width: 76px;
+
+    padding: 7px 5px;
 
     font-size: 12px;
   }
 
-  /* -----------------------------------------------
-     NEWSPAPER + ARROWS
-     ----------------------------------------------- */
+  .viewer-crop-button,
+  .viewer-reset-button {
+    min-width: 64px;
 
-  .newspaper-page-wrapper {
-    gap: 4px;
+    min-height: 40px;
 
-    width: 100%;
+    padding: 7px 9px;
+
+    font-size: 12px;
   }
 
-  .viewer-pdf-container {
-    width: calc(100% - 76px);
+  .newspaper-pdf-container {
+    width: 100%;
 
     height: 70vh;
 
     min-height: 420px;
 
     border-radius: 9px;
-
-    box-shadow:
-      0 4px 18px rgba(0, 0, 0, 0.08);
   }
 
-  .viewer-page-surface {
-    padding: 8px;
-  }
-
-  .newspaper-nav-button {
-    width: 34px;
-    height: 56px;
-
-    border-radius: 9px;
-
-    font-size: 34px;
-
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.14);
-  }
-
-  /* -----------------------------------------------
-     PAGE NUMBER
-     ----------------------------------------------- */
-
-  .viewer-page-indicator {
-    margin-top: 10px;
-
-    padding: 7px 15px;
-
-    font-size: 13px;
-  }
-
-  .viewer-zoom-hint {
-    margin-top: 6px;
-
-    font-size: 11px;
-  }
-
-  /* -----------------------------------------------
-     ACTION BUTTONS
-     ----------------------------------------------- */
-
-  .viewer-actions {
-    display: grid;
-
-    grid-template-columns:
-      repeat(3, 1fr);
-
+  .newspaper-bottom-navigation {
     gap: 7px;
 
-    padding-top: 14px;
+    margin-top: 8px;
+
+    padding: 7px;
+
+    border-radius: 10px;
   }
 
-  .viewer-actions button {
-    width: 100%;
-
+  .bottom-page-button {
     min-width: 0;
 
-    min-height: 46px;
+    flex: 1;
 
-    padding: 9px 6px;
+    min-height: 42px;
 
-    font-size: 13px;
+    padding: 8px 6px;
 
-    border-radius: 8px;
+    font-size: 12px;
   }
 
+  .bottom-page-number {
+    min-width: 62px;
+
+    font-size: 12px;
+  }
+
+  .newspaper-viewer-loading,
+  .newspaper-viewer-error {
+    min-height: 380px;
+
+    padding: 30px 16px;
+  }
 }
+
 
 /* =========================================================
    SMALL PHONES
@@ -589,34 +648,56 @@
 
 @media (max-width: 480px) {
 
-  .viewer-pdf-container {
-    width: calc(100% - 66px);
+  .newspaper-toolbar {
+    gap: 4px;
 
+    padding: 6px;
+  }
+
+  .viewer-nav-button {
+    width: 34px;
+
+    min-height: 38px;
+
+    font-size: 18px;
+  }
+
+  .viewer-page-info {
+    min-width: 68px;
+
+    font-size: 11px;
+  }
+
+  .viewer-crop-button,
+  .viewer-reset-button {
+    min-width: 58px;
+
+    min-height: 38px;
+
+    padding: 6px 7px;
+
+    font-size: 11px;
+  }
+
+  .newspaper-pdf-container {
     height: 67vh;
 
     min-height: 390px;
   }
 
-  .newspaper-nav-button {
-    width: 29px;
-    height: 52px;
+  .bottom-page-button {
+    min-height: 40px;
 
-    font-size: 31px;
-
-    border-radius: 8px;
+    font-size: 11px;
   }
 
-  .viewer-page-surface {
-    padding: 6px;
+  .bottom-page-number {
+    min-width: 55px;
+
+    font-size: 11px;
   }
-
-  .viewer-actions button {
-    min-height: 44px;
-
-    font-size: 12px;
-  }
-
 }
+
 
 /* =========================================================
    VERY SMALL PHONES
@@ -624,25 +705,87 @@
 
 @media (max-width: 360px) {
 
-  .viewer-pdf-container {
-    width: calc(100% - 58px);
+  .newspaper-viewer {
+    padding: 5px;
+  }
 
+  .newspaper-toolbar {
+    gap: 3px;
+
+    padding: 5px;
+  }
+
+  .viewer-nav-button {
+    width: 31px;
+
+    min-height: 36px;
+
+    font-size: 17px;
+  }
+
+  .viewer-page-info {
+    min-width: 58px;
+
+    padding-left: 2px;
+    padding-right: 2px;
+
+    font-size: 10px;
+  }
+
+  .viewer-crop-button,
+  .viewer-reset-button {
+    min-width: 52px;
+
+    min-height: 36px;
+
+    padding: 5px;
+
+    font-size: 10px;
+  }
+
+  .newspaper-pdf-container {
     height: 64vh;
 
     min-height: 360px;
   }
 
-  .newspaper-nav-button {
-    width: 25px;
-    height: 48px;
+  .newspaper-bottom-navigation {
+    gap: 4px;
 
-    font-size: 28px;
+    padding: 5px;
   }
 
-  .viewer-page-indicator {
-    font-size: 12px;
+  .bottom-page-button {
+    min-height: 38px;
 
-    padding: 6px 12px;
+    padding: 7px 4px;
+
+    font-size: 10px;
   }
 
+  .bottom-page-number {
+    min-width: 48px;
+
+    font-size: 10px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .newspaper-spinner {
+    animation: none;
+  }
+
+  .viewer-nav-button,
+  .viewer-crop-button,
+  .viewer-reset-button,
+  .bottom-page-button,
+  .newspaper-retry-button {
+    transition: none;
+  }
 }

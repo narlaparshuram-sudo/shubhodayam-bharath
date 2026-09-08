@@ -497,3 +497,28 @@
     padding: 13px 14px;
   }
 }
+/* ==========================================================
+   CALENDAR EMPTY / STATUS MESSAGES
+========================================================== */
+
+.calendar-message,
+.calendar-error {
+  margin: 20px 0;
+  padding: 22px 18px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.calendar-message {
+  background: #f8fafc;
+  border: 1px solid #dfe5eb;
+  color: #475569;
+}
+
+.calendar-error {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #b00020;
+}

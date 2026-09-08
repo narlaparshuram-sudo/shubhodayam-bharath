@@ -885,7 +885,7 @@ export default function Admin() {
             style={navButtonStyle()}
           >
             Home
-          </a>
+          </Link>
 
           <Link
             to="/calendar"
