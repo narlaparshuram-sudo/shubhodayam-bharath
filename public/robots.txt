@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://shubhodayam-bharath.vercel.app/sitemap.xml
+Sitemap: https://shubhodayam-bharath.vercel.app/api/sitemap
