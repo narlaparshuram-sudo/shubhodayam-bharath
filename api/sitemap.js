@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   try {
     const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       return res.status(500).send("Supabase environment variables are missing.");
