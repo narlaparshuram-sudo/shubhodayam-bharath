@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
@@ -8,6 +7,34 @@
 
   <url>
     <loc>https://shubhodayam-bharath.vercel.app/calendar</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-08-26</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-08-28</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-08-29</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-08-31</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-09-06</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-09-08</loc>
+  </url>
+
+  <url>
+    <loc>https://shubhodayam-bharath.vercel.app/newspaper/2026-09-09</loc>
   </url>
 
 </urlset>
