@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://shubhodayam-bharath.vercel.app/sitemap.xml
