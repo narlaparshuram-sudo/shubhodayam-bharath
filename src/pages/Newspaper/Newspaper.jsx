@@ -76,6 +76,45 @@ function Newspaper() {
         "name",
         "description"
       )
+      // ========================================================
+    // STRUCTURED DATA
+    // ========================================================
+
+    const existingSchema =
+      document.getElementById("newspaper-schema")
+
+    if (existingSchema) {
+      existingSchema.remove()
+    }
+
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": document.title,
+      "description": description,
+      "url": `https://shubhodayam-bharath.vercel.app/newspaper/${date}`,
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": "Shubhodayam Bharath",
+        "url": "https://shubhodayam-bharath.vercel.app/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Shubhodayam Bharath",
+        "url": "https://shubhodayam-bharath.vercel.app/"
+      },
+      "datePublished": date
+    }
+
+    const script =
+      document.createElement("script")
+
+    script.id = "newspaper-schema"
+    script.type = "application/ld+json"
+    script.textContent =
+      JSON.stringify(schema)
+
+    document.head.appendChild(script)
 
       document.head.appendChild(
         metaDescription
