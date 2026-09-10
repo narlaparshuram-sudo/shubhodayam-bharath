@@ -181,17 +181,24 @@ function NewspaperViewer({ edition }) {
           pdf.numPages
         )
 
-        pdfRef.current = pdf
+        pdfRef.current =
+          pdf
 
-        setPdfDocument(pdf)
+        setPdfDocument(
+          pdf
+        )
 
         setTotalPages(
           pdf.numPages
         )
 
-        setCurrentPage(1)
+        setCurrentPage(
+          1
+        )
 
-        setLoading(false)
+        setLoading(
+          false
+        )
       } catch (err) {
         console.error(
           "NEWSPAPER PDF LOAD ERROR:",
@@ -202,9 +209,13 @@ function NewspaperViewer({ edition }) {
           return
         }
 
-        setPdfDocument(null)
+        setPdfDocument(
+          null
+        )
 
-        setLoading(false)
+        setLoading(
+          false
+        )
 
         setError(
           err?.message ||
@@ -231,7 +242,8 @@ function NewspaperViewer({ edition }) {
           // Ignore render cleanup errors.
         }
 
-        renderTaskRef.current = null
+        renderTaskRef.current =
+          null
       }
 
       // ----------------------------------------------------
@@ -241,7 +253,8 @@ function NewspaperViewer({ edition }) {
       const oldPdf =
         pdfRef.current
 
-      pdfRef.current = null
+      pdfRef.current =
+        null
 
       if (
         oldPdf &&
@@ -276,7 +289,7 @@ function NewspaperViewer({ edition }) {
         try {
           loadingTask.destroy()
         } catch {
-          // Ignore loading cleanup errors.
+          // Ignore cleanup errors.
         }
       }
     }
@@ -307,9 +320,13 @@ function NewspaperViewer({ edition }) {
     updateSize()
 
     const resizeObserver =
-      new ResizeObserver(updateSize)
+      new ResizeObserver(
+        updateSize
+      )
 
-    resizeObserver.observe(element)
+    resizeObserver.observe(
+      element
+    )
 
     window.addEventListener(
       "resize",
@@ -337,7 +354,10 @@ function NewspaperViewer({ edition }) {
     const canvas =
       canvasRef.current
 
-    if (!container || !canvas) {
+    if (
+      !container ||
+      !canvas
+    ) {
       return
     }
 
@@ -356,17 +376,19 @@ function NewspaperViewer({ edition }) {
     const left =
       Math.max(
         0,
-        (containerWidth -
-          canvasWidth) /
-          2
+        (
+          containerWidth -
+          canvasWidth
+        ) / 2
       )
 
     const top =
       Math.max(
         0,
-        (containerHeight -
-          canvasHeight) /
-          2
+        (
+          containerHeight -
+          canvasHeight
+        ) / 2
       )
 
     canvas.style.marginLeft =
@@ -419,7 +441,8 @@ function NewspaperViewer({ edition }) {
             // Ignore.
           }
 
-          renderTaskRef.current = null
+          renderTaskRef.current =
+            null
         }
 
         // --------------------------------------------------
@@ -501,7 +524,8 @@ function NewspaperViewer({ edition }) {
         // --------------------------------------------------
 
         const visualScale =
-          fitScale * zoom
+          fitScale *
+          zoom
 
         // --------------------------------------------------
         // High quality render scale
@@ -577,7 +601,8 @@ function NewspaperViewer({ edition }) {
 
         const displayViewport =
           page.getViewport({
-            scale: visualScale,
+            scale:
+              visualScale,
           })
 
         // --------------------------------------------------
@@ -586,7 +611,8 @@ function NewspaperViewer({ edition }) {
 
         const renderViewport =
           page.getViewport({
-            scale: renderScale,
+            scale:
+              renderScale,
           })
 
         // --------------------------------------------------
@@ -655,7 +681,8 @@ function NewspaperViewer({ edition }) {
             viewport:
               renderViewport,
 
-            intent: "display",
+            intent:
+              "display",
           })
 
         renderTaskRef.current =
@@ -713,7 +740,8 @@ function NewspaperViewer({ edition }) {
           // Ignore.
         }
 
-        renderTaskRef.current = null
+        renderTaskRef.current =
+          null
       }
     }
   }, [
@@ -908,11 +936,15 @@ function NewspaperViewer({ edition }) {
       return
     }
 
-    setCropOpen(true)
+    setCropOpen(
+      true
+    )
   }
 
   function closeCropEditor() {
-    setCropOpen(false)
+    setCropOpen(
+      false
+    )
   }
 
   // ========================================================
@@ -955,10 +987,17 @@ function NewspaperViewer({ edition }) {
         "a"
       )
 
-    link.href = pdfUrl
-    link.download = fileName
-    link.target = "_blank"
-    link.rel = "noopener noreferrer"
+    link.href =
+      pdfUrl
+
+    link.download =
+      fileName
+
+    link.target =
+      "_blank"
+
+    link.rel =
+      "noopener noreferrer"
 
     document.body.appendChild(
       link
@@ -976,10 +1015,7 @@ function NewspaperViewer({ edition }) {
   // ========================================================
 
   async function shareNewspaper() {
-    const pdfUrl =
-      getPdfUrl(edition)
-
-    if (!pdfUrl) {
+    if (!edition) {
       return
     }
 
@@ -987,13 +1023,25 @@ function NewspaperViewer({ edition }) {
       edition?.date ||
       ""
 
+    if (!editionDate) {
+      return
+    }
+
+    // IMPORTANT:
+    // Share the Vercel server-side preview URL,
+    // NOT the direct PDF URL.
+    //
+    // WhatsApp/Facebook can read the Open Graph
+    // thumbnail from /api/share before React loads.
+
+    const shareUrl =
+      `https://shubhodayam-bharath.vercel.app/share/${editionDate}`
+
     const title =
-      "Shubhodayam Bharath"
+      `Shubhodayam Bharath – Newspaper Edition ${editionDate}`
 
     const text =
-      editionDate
-        ? `Shubhodayam Bharath - Newspaper Edition ${editionDate}`
-        : "Shubhodayam Bharath Newspaper"
+      "Shubhodayam Bharath – Daily Telugu & English Newspaper"
 
     try {
       setSharing(true)
@@ -1009,7 +1057,7 @@ function NewspaperViewer({ edition }) {
         await navigator.share({
           title,
           text,
-          url: pdfUrl,
+          url: shareUrl,
         })
 
         return
@@ -1025,7 +1073,7 @@ function NewspaperViewer({ edition }) {
           "function"
       ) {
         await navigator.clipboard.writeText(
-          pdfUrl
+          shareUrl
         )
 
         setShareMessage(
@@ -1045,10 +1093,11 @@ function NewspaperViewer({ edition }) {
 
       window.prompt(
         "Copy newspaper link:",
-        pdfUrl
+        shareUrl
       )
     } catch (err) {
       // User cancelling native share is not an error
+
       if (
         err?.name ===
         "AbortError"
@@ -1062,6 +1111,7 @@ function NewspaperViewer({ edition }) {
       )
 
       // Try clipboard if native sharing fails
+
       try {
         if (
           navigator.clipboard &&
@@ -1069,7 +1119,7 @@ function NewspaperViewer({ edition }) {
             "function"
         ) {
           await navigator.clipboard.writeText(
-            pdfUrl
+            shareUrl
           )
 
           setShareMessage(
@@ -1079,6 +1129,10 @@ function NewspaperViewer({ edition }) {
           setTimeout(() => {
             setShareMessage("")
           }, 2500)
+        } else {
+          setShareMessage(
+            "Unable to share the newspaper."
+          )
         }
       } catch {
         setShareMessage(
@@ -1159,7 +1213,9 @@ function NewspaperViewer({ edition }) {
         pdf={
           pdfDocument
         }
-        edition={edition}
+        edition={
+          edition
+        }
         pageNumber={
           currentPage
         }

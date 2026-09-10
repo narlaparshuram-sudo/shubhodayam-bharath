@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|sitemap\\.xml).*)",
-      "destination": "/index.html"
+      "source": "/share/:date",
+      "destination": "/api/share?date=:date"
     }
   ]
 }
