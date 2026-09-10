@@ -3,6 +3,22 @@
     {
       "source": "/share/:date",
       "destination": "/api/share?date=:date"
+    },
+    {
+      "source": "/newspaper/:date",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/calendar",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/index.html"
     }
   ]
 }

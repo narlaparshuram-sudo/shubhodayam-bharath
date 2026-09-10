@@ -20,8 +20,6 @@ export default function handler(req, res) {
   //
   // IMPORTANT:
   // Set SUPABASE_URL in Vercel Environment Variables.
-  // Example:
-  // https://your-project.supabase.co
   // -------------------------------------------------------
 
   const supabaseUrl =
@@ -171,11 +169,14 @@ export default function handler(req, res) {
   />
 
   <script>
-    window.location.replace(${JSON.stringify(newspaperUrl)})
+    window.location.replace(
+      ${JSON.stringify(newspaperUrl)}
+    )
   </script>
 </head>
 
 <body>
+
   <p>
     Opening Shubhodayam Bharath newspaper...
   </p>
@@ -185,6 +186,7 @@ export default function handler(req, res) {
       Open Newspaper
     </a>
   </p>
+
 </body>
 </html>`
 
