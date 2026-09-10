@@ -1,18 +1,56 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  getDocument,
+  GlobalWorkerOptions,
+} from "pdfjs-dist";
 import { supabase } from "../../lib/supabase";
 
-export default function Admin() {
-  const [session, setSession] = useState(null);
+// ==========================================================
+// PDF.JS WORKER
+// ==========================================================
 
+GlobalWorkerOptions.workerSrc =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.worker.min.mjs";
+
+const PDF_WASM_URL =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/wasm/";
+
+// ==========================================================
+// ADMIN PAGE
+// ==========================================================
+
+export default function Admin() {
+  // ========================================================
+  // AUTH
+  // ========================================================
+
+  const [session, setSession] = useState(null);
   const [checkingAdmin, setCheckingAdmin] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // ========================================================
+  // FORM
+  // ========================================================
 
   const [date, setDate] = useState("");
   const [file, setFile] = useState(null);
 
+  // IMPORTANT:
+  // Using a ref makes file input handling more reliable on
+  // Android and iOS browsers.
+  const fileInputRef = useRef(null);
+
+  // ========================================================
+  // EDITION
+  // ========================================================
+
   const [existingEdition, setExistingEdition] = useState(null);
   const [checkingEdition, setCheckingEdition] = useState(false);
+
+  // ========================================================
+  // STATUS
+  // ========================================================
 
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -20,49 +58,105 @@ export default function Admin() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("");
 
-  /*
-   * =========================================================
-   * AUTHENTICATION + ADMIN CHECK
-   * =========================================================
-   */
+  // ========================================================
+  // AUTH CHECK
+  // ========================================================
 
   useEffect(() => {
     let mounted = true;
 
-    async function initialize() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    async function loadSession() {
+      try {
+        setCheckingAdmin(true);
 
-      if (!mounted) return;
+        const {
+          data: { session: currentSession },
+          error,
+        } = await supabase.auth.getSession();
 
-      setSession(session);
+        if (error) {
+          console.error("Session error:", error);
 
-      if (session?.user) {
-        await verifyAdmin(session);
-      } else {
-        setCheckingAdmin(false);
-      }
-    }
+          if (mounted) {
+            setSession(null);
+            setIsAdmin(false);
+            setCheckingAdmin(false);
+          }
 
-    initialize();
+          return;
+        }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
         if (!mounted) return;
 
-        setSession(newSession);
+        setSession(currentSession);
 
-        if (newSession?.user) {
-          await verifyAdmin(newSession);
+        if (currentSession?.user) {
+          await verifyAdmin(currentSession.user.id);
         } else {
           setIsAdmin(false);
           setCheckingAdmin(false);
         }
+      } catch (error) {
+        console.error("Auth check error:", error);
+
+        if (mounted) {
+          setSession(null);
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
       }
-    );
+    }
+
+    async function verifyAdmin(userId) {
+      try {
+        const { data, error } = await supabase
+          .from("admin_users")
+          .select("user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Admin verification error:", error);
+
+          if (mounted) {
+            setIsAdmin(false);
+            setCheckingAdmin(false);
+          }
+
+          return;
+        }
+
+        if (!mounted) return;
+
+        setIsAdmin(!!data);
+        setCheckingAdmin(false);
+      } catch (error) {
+        console.error("Admin verification exception:", error);
+
+        if (mounted) {
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
+      }
+    }
+
+    loadSession();
+
+    // Listen for login/logout changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      if (!mounted) return;
+
+      setSession(newSession);
+
+      if (newSession?.user) {
+        await verifyAdmin(newSession.user.id);
+      } else {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+      }
+    });
 
     return () => {
       mounted = false;
@@ -70,66 +164,12 @@ export default function Admin() {
     };
   }, []);
 
-  async function verifyAdmin(currentSession) {
-    setCheckingAdmin(true);
-    setIsAdmin(false);
-
-    if (!currentSession?.user?.id) {
-      setCheckingAdmin(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", currentSession.user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error(
-          "Admin verification error:",
-          error
-        );
-
-        setMessage(
-          "Unable to verify administrator access. Please try again."
-        );
-
-        setMessageType("error");
-
-        return;
-      }
-
-      if (data?.user_id === currentSession.user.id) {
-        setIsAdmin(true);
-      } else {
-        setIsAdmin(false);
-      }
-    } catch (error) {
-      console.error(
-        "Admin verification error:",
-        error
-      );
-
-      setMessage(
-        "Unable to verify administrator access."
-      );
-
-      setMessageType("error");
-    } finally {
-      setCheckingAdmin(false);
-    }
-  }
-
-  /*
-   * =========================================================
-   * CHECK SELECTED DATE
-   * =========================================================
-   */
+  // ========================================================
+  // CHECK EXISTING EDITION
+  // ========================================================
 
   useEffect(() => {
-    if (!date || !isAdmin) {
+    if (!isAdmin || !date) {
       setExistingEdition(null);
       return;
     }
@@ -138,13 +178,14 @@ export default function Admin() {
   }, [date, isAdmin]);
 
   async function checkEdition(selectedDate) {
-    setCheckingEdition(true);
-    setExistingEdition(null);
-
-    setMessage("");
-    setMessageType("");
+    if (!selectedDate) {
+      setExistingEdition(null);
+      return;
+    }
 
     try {
+      setCheckingEdition(true);
+
       const { data, error } = await supabase
         .from("editions")
         .select(
@@ -154,18 +195,17 @@ export default function Admin() {
         .maybeSingle();
 
       if (error) {
-        throw error;
+        console.error("Edition check error:", error);
+
+        setExistingEdition(null);
+
+        setMessage(
+          "Unable to check whether this date already exists."
+        );
+        setMessageType("error");
+
+        return;
       }
-
-      console.log(
-        "ADMIN DATE CHECK:",
-        selectedDate
-      );
-
-      console.log(
-        "ADMIN EDITION RESULT:",
-        data
-      );
 
       if (data) {
         setExistingEdition(data);
@@ -173,52 +213,64 @@ export default function Admin() {
         setMessage(
           `A newspaper for ${selectedDate} already exists. You can replace or delete it.`
         );
-
         setMessageType("info");
       } else {
         setExistingEdition(null);
+
+        setMessage(
+          `No newspaper exists for ${selectedDate}. You can upload a new edition.`
+        );
+        setMessageType("success");
       }
     } catch (error) {
-      console.error(
-        "Edition check error:",
-        error
-      );
+      console.error("Check edition exception:", error);
+
+      setExistingEdition(null);
 
       setMessage(
-        error?.message ||
-          "Unable to check the selected newspaper date."
+        "Unable to check the selected newspaper date."
       );
-
       setMessageType("error");
     } finally {
       setCheckingEdition(false);
     }
   }
 
-  /*
-   * =========================================================
-   * FILE SELECTION
-   * =========================================================
-   */
+  // ========================================================
+  // FILE SELECTION
+  // ANDROID / IOS FRIENDLY
+  // ========================================================
 
   function handleFileChange(event) {
+    const input = event.currentTarget;
+
     const selectedFile =
-      event.target.files?.[0];
+      input.files && input.files.length > 0
+        ? input.files[0]
+        : null;
 
     setMessage("");
     setMessageType("");
 
+    // User cancelled the Android/iOS file picker
     if (!selectedFile) {
       setFile(null);
       return;
     }
 
+    const fileName = String(
+      selectedFile.name || ""
+    ).toLowerCase();
+
+    const fileType = String(
+      selectedFile.type || ""
+    ).toLowerCase();
+
+    // Some mobile file pickers don't always provide
+    // the MIME type correctly.
     const isPdf =
-      selectedFile.type ===
-        "application/pdf" ||
-      selectedFile.name
-        .toLowerCase()
-        .endsWith(".pdf");
+      fileType === "application/pdf" ||
+      fileName.endsWith(".pdf");
 
     if (!isPdf) {
       setFile(null);
@@ -229,19 +281,214 @@ export default function Admin() {
 
       setMessageType("error");
 
-      event.target.value = "";
+      input.value = "";
+
+      return;
+    }
+
+    // Make sure the selected file is valid
+    if (selectedFile.size <= 0) {
+      setFile(null);
+
+      setMessage(
+        "The selected PDF appears to be empty. Please choose another PDF."
+      );
+
+      setMessageType("error");
+
+      input.value = "";
 
       return;
     }
 
     setFile(selectedFile);
+
+    console.log(
+      "================================="
+    );
+    console.log("PDF SELECTED");
+    console.log(
+      "Name:",
+      selectedFile.name
+    );
+    console.log(
+      "Type:",
+      selectedFile.type
+    );
+    console.log(
+      "Size:",
+      selectedFile.size
+    );
+    console.log(
+      "Last modified:",
+      selectedFile.lastModified
+    );
+    console.log(
+      "================================="
+    );
+
+    setMessage(
+      `PDF selected successfully: ${selectedFile.name}`
+    );
+
+    setMessageType("success");
   }
 
-  /*
-   * =========================================================
-   * UPLOAD / REPLACE
-   * =========================================================
-   */
+  // ========================================================
+  // GENERATE THUMBNAIL
+  // ========================================================
+
+  async function generateAndUploadThumbnail(
+    selectedFile,
+    selectedDate
+  ) {
+    let pdf = null;
+
+    try {
+      const arrayBuffer =
+        await selectedFile.arrayBuffer();
+
+      const loadingTask = getDocument({
+        data: new Uint8Array(arrayBuffer),
+        wasmUrl: PDF_WASM_URL,
+      });
+
+      pdf = await loadingTask.promise;
+
+      const page = await pdf.getPage(1);
+
+      // ----------------------------------------------------
+      // Thumbnail size
+      // ----------------------------------------------------
+
+      const baseViewport =
+        page.getViewport({
+          scale: 1,
+        });
+
+      const targetWidth = 700;
+
+      const scale =
+        targetWidth /
+        baseViewport.width;
+
+      const viewport =
+        page.getViewport({
+          scale,
+        });
+
+      const canvas =
+        document.createElement("canvas");
+
+      canvas.width =
+        Math.ceil(viewport.width);
+
+      canvas.height =
+        Math.ceil(viewport.height);
+
+      const context =
+        canvas.getContext("2d", {
+          alpha: false,
+        });
+
+      if (!context) {
+        throw new Error(
+          "Could not create thumbnail canvas."
+        );
+      }
+
+      // White background
+      context.fillStyle = "#ffffff";
+
+      context.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      await page.render({
+        canvasContext: context,
+        viewport,
+        intent: "display",
+      }).promise;
+
+      const blob =
+        await new Promise(
+          (resolve, reject) => {
+            canvas.toBlob(
+              (result) => {
+                if (result) {
+                  resolve(result);
+                } else {
+                  reject(
+                    new Error(
+                      "Could not create thumbnail image."
+                    )
+                  );
+                }
+              },
+              "image/jpeg",
+              0.82
+            );
+          }
+        );
+
+      // ----------------------------------------------------
+      // Thumbnail path
+      // ----------------------------------------------------
+
+      const thumbnailPath =
+        `thumbnails/${selectedDate}.jpg`;
+
+      const {
+        error: thumbnailUploadError,
+      } = await supabase.storage
+        .from("newspapers")
+        .upload(
+          thumbnailPath,
+          blob,
+          {
+            cacheControl: "3600",
+            contentType: "image/jpeg",
+            upsert: true,
+          }
+        );
+
+      if (thumbnailUploadError) {
+        throw thumbnailUploadError;
+      }
+
+      console.log(
+        "Thumbnail uploaded:",
+        thumbnailPath
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Thumbnail generation/upload error:",
+        error
+      );
+
+      return false;
+    } finally {
+      if (pdf) {
+        try {
+          await pdf.destroy();
+        } catch (destroyError) {
+          console.warn(
+            "PDF destroy warning:",
+            destroyError
+          );
+        }
+      }
+    }
+  }
+
+  // ========================================================
+  // UPLOAD / REPLACE
+  // ========================================================
 
   async function handleUpload(event) {
     event.preventDefault();
@@ -249,23 +496,31 @@ export default function Admin() {
     setMessage("");
     setMessageType("");
 
-    if (!session || !isAdmin) {
+    // ------------------------------------------------------
+    // Validation
+    // ------------------------------------------------------
+
+    if (!session?.user) {
       setMessage(
-        "Administrator access is required."
+        "Your admin session has expired. Please sign in again."
       );
-
       setMessageType("error");
+      return;
+    }
 
+    if (!isAdmin) {
+      setMessage(
+        "You do not have administrator access."
+      );
+      setMessageType("error");
       return;
     }
 
     if (!date) {
       setMessage(
-        "Please select the newspaper date."
+        "Please select a newspaper date."
       );
-
       setMessageType("error");
-
       return;
     }
 
@@ -273,9 +528,31 @@ export default function Admin() {
       setMessage(
         "Please select a PDF file."
       );
-
       setMessageType("error");
+      return;
+    }
 
+    // ------------------------------------------------------
+    // Double-check PDF
+    // ------------------------------------------------------
+
+    const fileName = String(
+      file.name || ""
+    ).toLowerCase();
+
+    const fileType = String(
+      file.type || ""
+    ).toLowerCase();
+
+    const isPdf =
+      fileType === "application/pdf" ||
+      fileName.endsWith(".pdf");
+
+    if (!isPdf) {
+      setMessage(
+        "Please select a PDF file only."
+      );
+      setMessageType("error");
       return;
     }
 
@@ -284,44 +561,68 @@ export default function Admin() {
 
       const filePath = `${date}.pdf`;
 
-      /*
-       * =====================================================
-       * REPLACE EXISTING NEWSPAPER
-       * =====================================================
-       */
+      console.log(
+        "================================="
+      );
+      console.log("STARTING NEWSPAPER UPLOAD");
+      console.log("Date:", date);
+      console.log("File:", file.name);
+      console.log("Size:", file.size);
+      console.log(
+        "Existing edition:",
+        !!existingEdition
+      );
+      console.log(
+        "File path:",
+        filePath
+      );
+      console.log(
+        "================================="
+      );
+
+      // ====================================================
+      // REPLACE EXISTING EDITION
+      // ====================================================
 
       if (existingEdition) {
-        /*
-         * Replace existing PDF in Supabase Storage.
-         *
-         * IMPORTANT:
-         * We use .update() here because the file
-         * already exists.
-         */
-
-        const { error: uploadError } =
-          await supabase.storage
-            .from("newspapers")
-            .update(
-              filePath,
-              file,
-              {
-                cacheControl: "3600",
-                contentType:
-                  "application/pdf",
-              }
-            );
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        /*
-         * Update the existing database row.
-         */
+        setMessage(
+          "Replacing existing newspaper..."
+        );
+        setMessageType("info");
 
         const {
-          error: databaseError,
+          error: storageError,
+        } = await supabase.storage
+          .from("newspapers")
+          .update(
+            filePath,
+            file,
+            {
+              cacheControl: "3600",
+              contentType: "application/pdf",
+              upsert: true,
+            }
+          );
+
+        if (storageError) {
+          console.error(
+            "Storage replacement error:",
+            storageError
+          );
+
+          throw storageError;
+        }
+
+        console.log(
+          "PDF replaced successfully."
+        );
+
+        // --------------------------------------------------
+        // Update database record
+        // --------------------------------------------------
+
+        const {
+          error: updateEditionError,
         } = await supabase
           .from("editions")
           .update({
@@ -332,134 +633,245 @@ export default function Admin() {
             existingEdition.id
           );
 
-        if (databaseError) {
-          throw databaseError;
+        if (updateEditionError) {
+          console.error(
+            "Edition update error:",
+            updateEditionError
+          );
+
+          throw updateEditionError;
         }
 
-        setMessage(
-          `Newspaper for ${date} replaced successfully!`
+        console.log(
+          "Edition database record updated."
         );
 
-        setMessageType("success");
-      }
+        // --------------------------------------------------
+        // Thumbnail
+        // --------------------------------------------------
 
-      /*
-       * =====================================================
-       * UPLOAD NEW NEWSPAPER
-       * =====================================================
-       */
+        const thumbnailCreated =
+          await generateAndUploadThumbnail(
+            file,
+            date
+          );
 
-      else {
-        /*
-         * Upload PDF to Storage.
-         */
-
-        const { error: uploadError } =
-          await supabase.storage
-            .from("newspapers")
-            .upload(
-              filePath,
-              file,
-              {
-                cacheControl: "3600",
-                contentType:
-                  "application/pdf",
-                upsert: false,
-              }
-            );
-
-        if (uploadError) {
-          throw uploadError;
+        if (!thumbnailCreated) {
+          setMessage(
+            `${date} replaced successfully, but the thumbnail could not be generated.`
+          );
+          setMessageType("info");
+        } else {
+          setMessage(
+            `${date} newspaper replaced successfully.`
+          );
+          setMessageType("success");
         }
 
-        /*
-         * Create database record.
-         */
+        // --------------------------------------------------
+        // Refresh edition
+        // --------------------------------------------------
 
-        const {
-          error: databaseError,
-        } = await supabase
-          .from("editions")
-          .insert([
-            {
-              date: date,
-              title:
-                "SHUBHODAYAM BHARATH",
-              pdf_path: filePath,
-            },
-          ]);
+        await checkEdition(date);
 
-        if (databaseError) {
-          /*
-           * If database insertion fails,
-           * remove the uploaded PDF.
-           */
+        // Keep successful replacement message
+        if (thumbnailCreated) {
+          setMessage(
+            `${date} newspaper replaced successfully.`
+          );
+          setMessageType("success");
+        }
 
+        // --------------------------------------------------
+        // Clear selected file
+        // --------------------------------------------------
+
+        setFile(null);
+
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+
+        return;
+      }
+
+      // ====================================================
+      // NEW EDITION
+      // ====================================================
+
+      setMessage(
+        "Uploading newspaper PDF..."
+      );
+      setMessageType("info");
+
+      const {
+        error: uploadError,
+      } = await supabase.storage
+        .from("newspapers")
+        .upload(
+          filePath,
+          file,
+          {
+            cacheControl: "3600",
+            contentType: "application/pdf",
+            upsert: false,
+          }
+        );
+
+      if (uploadError) {
+        console.error(
+          "PDF upload error:",
+          uploadError
+        );
+
+        throw uploadError;
+      }
+
+      console.log(
+        "PDF uploaded successfully."
+      );
+
+      // ====================================================
+      // SAVE EDITION IN DATABASE
+      // ====================================================
+
+      const {
+        data: insertedEdition,
+        error: insertError,
+      } = await supabase
+        .from("editions")
+        .insert({
+          date,
+          title: "SHUBHODAYAM BHARATH",
+          pdf_path: filePath,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error(
+          "Edition insert error:",
+          insertError
+        );
+
+        // If DB insert fails, remove uploaded PDF
+        try {
           await supabase.storage
             .from("newspapers")
             .remove([filePath]);
-
-          throw databaseError;
+        } catch (removeError) {
+          console.error(
+            "Failed to remove uploaded PDF after DB error:",
+            removeError
+          );
         }
 
-        setMessage(
-          `Newspaper for ${date} uploaded successfully!`
-        );
-
-        setMessageType("success");
+        throw insertError;
       }
 
-      /*
-       * Refresh the selected date.
-       */
+      console.log(
+        "Edition saved successfully:",
+        insertedEdition
+      );
 
-      await checkEdition(date);
+      // ====================================================
+      // GENERATE THUMBNAIL
+      // ====================================================
 
-      /*
-       * Clear selected file.
-       */
+      setMessage(
+        "Generating newspaper thumbnail..."
+      );
+      setMessageType("info");
 
-      setFile(null);
-
-      const fileInput =
-        document.getElementById(
-          "newspaper-pdf"
+      const thumbnailCreated =
+        await generateAndUploadThumbnail(
+          file,
+          date
         );
 
-      if (fileInput) {
-        fileInput.value = "";
+      // ====================================================
+      // SUCCESS
+      // ====================================================
+
+      if (thumbnailCreated) {
+        setMessage(
+          `${date} newspaper uploaded successfully.`
+        );
+        setMessageType("success");
+      } else {
+        setMessage(
+          `${date} newspaper uploaded successfully, but the thumbnail could not be generated.`
+        );
+        setMessageType("info");
+      }
+
+      // Refresh existing edition state
+      await checkEdition(date);
+
+      // Keep correct final message
+      if (thumbnailCreated) {
+        setMessage(
+          `${date} newspaper uploaded successfully.`
+        );
+        setMessageType("success");
+      } else {
+        setMessage(
+          `${date} newspaper uploaded successfully, but the thumbnail could not be generated.`
+        );
+        setMessageType("info");
+      }
+
+      // Clear selected file
+      setFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
     } catch (error) {
       console.error(
-        "Admin upload/replace error:",
-        error
+        "================================="
+      );
+      console.error(
+        "NEWSPAPER UPLOAD FAILED"
+      );
+      console.error(error);
+      console.error(
+        "================================="
       );
 
-      setMessage(
-        error?.message ||
-          "Unable to save the newspaper."
-      );
+      let errorMessage =
+        "Newspaper upload failed.";
 
+      if (error?.message) {
+        errorMessage =
+          `Newspaper upload failed: ${error.message}`;
+      }
+
+      setMessage(errorMessage);
       setMessageType("error");
     } finally {
       setUploading(false);
     }
   }
 
-  /*
-   * =========================================================
-   * DELETE NEWSPAPER
-   * =========================================================
-   */
+  // ========================================================
+  // DELETE EDITION
+  // ========================================================
 
   async function handleDelete() {
-    if (!session || !isAdmin) {
+    if (!session?.user) {
       setMessage(
-        "Administrator access is required."
+        "Your admin session has expired. Please sign in again."
       );
-
       setMessageType("error");
+      return;
+    }
 
+    if (!isAdmin) {
+      setMessage(
+        "You do not have administrator access."
+      );
+      setMessageType("error");
       return;
     }
 
@@ -467,15 +879,13 @@ export default function Admin() {
       setMessage(
         "There is no newspaper to delete for this date."
       );
-
       setMessageType("error");
-
       return;
     }
 
     const confirmed =
       window.confirm(
-        `Are you sure you want to permanently delete the newspaper for ${date}?\n\nThe PDF will be removed and this edition will disappear from the Calendar.`
+        `Are you sure you want to delete the newspaper for ${date}? This cannot be undone.`
       );
 
     if (!confirmed) {
@@ -485,49 +895,67 @@ export default function Admin() {
     try {
       setDeleting(true);
 
-      setMessage("");
-      setMessageType("");
+      setMessage(
+        "Deleting newspaper..."
+      );
+      setMessageType("info");
 
-      /*
-       * Use the actual pdf_path stored
-       * in the database.
-       */
-
-      const storagePath =
+      const filePath =
         existingEdition.pdf_path ||
         `${date}.pdf`;
 
-      console.log(
-        "DELETING STORAGE FILE:",
-        storagePath
-      );
-
-      /*
-       * =====================================================
-       * DELETE PDF FROM STORAGE
-       * =====================================================
-       */
+      // ------------------------------------------------------
+      // Delete PDF
+      // ------------------------------------------------------
 
       const {
-        error: storageError,
+        error: storageDeleteError,
+      } = await supabase.storage
+        .from("newspapers")
+        .remove([filePath]);
+
+      if (storageDeleteError) {
+        console.error(
+          "PDF delete error:",
+          storageDeleteError
+        );
+
+        throw storageDeleteError;
+      }
+
+      console.log(
+        "PDF deleted:",
+        filePath
+      );
+
+      // ------------------------------------------------------
+      // Delete thumbnail
+      // ------------------------------------------------------
+
+      const thumbnailPath =
+        `thumbnails/${date}.jpg`;
+
+      const {
+        error: thumbnailDeleteError,
       } = await supabase.storage
         .from("newspapers")
         .remove([
-          storagePath,
+          thumbnailPath,
         ]);
 
-      if (storageError) {
-        throw storageError;
+      if (thumbnailDeleteError) {
+        console.warn(
+          "Thumbnail delete warning:",
+          thumbnailDeleteError
+        );
       }
 
-      /*
-       * =====================================================
-       * DELETE EDITION FROM DATABASE
-       * =====================================================
-       */
+      // ------------------------------------------------------
+      // Delete database edition
+      // ------------------------------------------------------
 
       const {
-        error: databaseError,
+        error: editionDeleteError,
       } = await supabase
         .from("editions")
         .delete()
@@ -536,40 +964,44 @@ export default function Admin() {
           existingEdition.id
         );
 
-      if (databaseError) {
-        throw databaseError;
+      if (editionDeleteError) {
+        console.error(
+          "Edition database delete error:",
+          editionDeleteError
+        );
+
+        throw editionDeleteError;
       }
 
-      /*
-       * Clear state.
-       */
+      console.log(
+        "Edition deleted from database."
+      );
+
+      // ------------------------------------------------------
+      // Clear state
+      // ------------------------------------------------------
 
       setExistingEdition(null);
       setFile(null);
 
-      const fileInput =
-        document.getElementById(
-          "newspaper-pdf"
-        );
-
-      if (fileInput) {
-        fileInput.value = "";
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
 
       setMessage(
-        `Newspaper for ${date} deleted successfully.`
+        `${date} newspaper deleted successfully.`
       );
-
       setMessageType("success");
     } catch (error) {
       console.error(
-        "Admin delete error:",
+        "Delete error:",
         error
       );
 
       setMessage(
-        error?.message ||
-          "Unable to delete the newspaper."
+        error?.message
+          ? `Delete failed: ${error.message}`
+          : "Newspaper deletion failed."
       );
 
       setMessageType("error");
@@ -578,56 +1010,64 @@ export default function Admin() {
     }
   }
 
-  /*
-   * =========================================================
-   * LOGOUT
-   * =========================================================
-   */
+  // ========================================================
+  // LOGOUT
+  // ========================================================
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
 
-    setSession(null);
-    setIsAdmin(false);
-    setExistingEdition(null);
-    setDate("");
-    setFile(null);
+      setSession(null);
+      setIsAdmin(false);
+      setFile(null);
+      setExistingEdition(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error(
+        "Logout error:",
+        error
+      );
+
+      setMessage(
+        "Unable to sign out."
+      );
+      setMessageType("error");
+    }
   }
 
-  /*
-   * =========================================================
-   * CHECKING ADMIN
-   * =========================================================
-   */
+  // ========================================================
+  // LOADING
+  // ========================================================
 
   if (checkingAdmin) {
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "#f5f7fa",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: 20,
+          padding: "24px",
+          background: "#f5f7fb",
         }}
       >
         <div
           style={{
             background: "#ffffff",
-            border:
-              "1px solid #e1e6eb",
-            borderRadius: 16,
-            padding: 35,
-            textAlign: "center",
+            padding: "32px",
+            borderRadius: "16px",
             boxShadow:
-              "0 8px 25px rgba(0,0,0,0.06)",
+              "0 10px 30px rgba(0,0,0,0.08)",
+            textAlign: "center",
           }}
         >
           <h2
             style={{
-              marginTop: 0,
-              color: "#123c69",
+              margin: "0 0 10px",
             }}
           >
             Checking Admin Access
@@ -635,8 +1075,8 @@ export default function Admin() {
 
           <p
             style={{
-              color: "#6b7280",
-              marginBottom: 0,
+              margin: 0,
+              color: "#666",
             }}
           >
             Please wait...
@@ -646,118 +1086,102 @@ export default function Admin() {
     );
   }
 
-  /*
-   * =========================================================
-   * NOT LOGGED IN
-   * =========================================================
-   */
+  // ========================================================
+  // NOT LOGGED IN
+  // ========================================================
 
   if (!session) {
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "#f5f7fa",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: 20,
+          padding: "24px",
+          background: "#f5f7fb",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: 480,
+            maxWidth: "500px",
             background: "#ffffff",
-            border:
-              "1px solid #e1e6eb",
-            borderRadius: 16,
-            padding: 35,
-            textAlign: "center",
+            padding: "32px",
+            borderRadius: "18px",
             boxShadow:
-              "0 8px 25px rgba(0,0,0,0.06)",
+              "0 10px 35px rgba(0,0,0,0.08)",
+            textAlign: "center",
           }}
         >
           <h1
             style={{
               marginTop: 0,
-              color: "#123c69",
-              fontFamily:
-                'Georgia, "Times New Roman", serif',
+              marginBottom: "10px",
             }}
           >
-            Admin Access
+            Shubhodayam Bharath
           </h1>
 
           <p
             style={{
-              color: "#6b7280",
-              lineHeight: 1.6,
+              color: "#666",
+              marginBottom: "24px",
             }}
           >
-            You must be logged in as an
-            administrator to manage newspaper
-            editions.
+            Admin access required.
           </p>
 
           <Link
-            to="/"
+            to="/admin/login"
             style={{
               display: "inline-block",
-              marginTop: 15,
-              background: "#123c69",
-              color: "#ffffff",
+              padding: "12px 22px",
+              borderRadius: "10px",
               textDecoration: "none",
-              padding: "11px 20px",
-              borderRadius: 8,
-              fontWeight: 700,
+              background: "#111827",
+              color: "#ffffff",
+              fontWeight: 600,
             }}
           >
-            Back to Home
+            Go to Admin Login
           </Link>
         </div>
       </div>
     );
   }
 
-  /*
-   * =========================================================
-   * LOGGED IN BUT NOT ADMIN
-   * =========================================================
-   */
+  // ========================================================
+  // NOT ADMIN
+  // ========================================================
 
   if (!isAdmin) {
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "#f5f7fa",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: 20,
+          padding: "24px",
+          background: "#f5f7fb",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: 480,
+            maxWidth: "500px",
             background: "#ffffff",
-            border:
-              "1px solid #fecaca",
-            borderRadius: 16,
-            padding: 35,
-            textAlign: "center",
+            padding: "32px",
+            borderRadius: "18px",
             boxShadow:
-              "0 8px 25px rgba(0,0,0,0.06)",
+              "0 10px 35px rgba(0,0,0,0.08)",
+            textAlign: "center",
           }}
         >
           <h1
             style={{
               marginTop: 0,
-              color: "#b91c1c",
-              fontFamily:
-                'Georgia, "Times New Roman", serif',
             }}
           >
             Access Denied
@@ -765,225 +1189,165 @@ export default function Admin() {
 
           <p
             style={{
-              color: "#6b7280",
-              lineHeight: 1.6,
+              color: "#666",
             }}
           >
-            This account does not have
-            administrator permissions.
+            Your account does not have administrator
+            permission.
           </p>
-
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              justifyContent: "center",
-              flexWrap: "wrap",
-              marginTop: 20,
-            }}
-          >
-            <Link
-              to="/"
-              style={{
-                display: "inline-block",
-                background: "#123c69",
-                color: "#ffffff",
-                textDecoration:
-                  "none",
-                padding: "11px 20px",
-                borderRadius: 8,
-                fontWeight: 700,
-              }}
-            >
-              Back to Home
-            </Link>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              style={{
-                border: "none",
-                background: "#b91c1c",
-                color: "#ffffff",
-                padding: "11px 20px",
-                borderRadius: 8,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /*
-   * =========================================================
-   * ADMIN PAGE
-   * =========================================================
-   */
-
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f5f7fa",
-        color: "#1f2937",
-      }}
-    >
-      {/* HEADER */}
-
-      <header
-        style={{
-          background: "#ffffff",
-          borderBottom:
-            "1px solid #e5e7eb",
-          padding: "18px 6%",
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          gap: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              color: "#123c69",
-              fontFamily:
-                'Georgia, "Times New Roman", serif',
-              fontSize: 28,
-              fontWeight: 700,
-            }}
-          >
-            Shubhodayam Bharath
-          </div>
-
-          <div
-            style={{
-              color: "#6b7280",
-              fontSize: 13,
-              marginTop: 3,
-            }}
-          >
-            Newspaper Administration
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
-          <Link
-            to="/"
-            style={navButtonStyle()}
-          >
-            Home
-          </Link>
-
-          <Link
-            to="/calendar"
-            style={navButtonStyle()}
-          >
-            Calendar
-          </Link>
 
           <button
             type="button"
             onClick={handleLogout}
             style={{
-              ...navButtonStyle(),
+              marginTop: "20px",
+              padding: "12px 22px",
               border: "none",
-              cursor: "pointer",
-              background: "#b91c1c",
+              borderRadius: "10px",
+              background: "#111827",
               color: "#ffffff",
+              fontWeight: 600,
+              cursor: "pointer",
             }}
           >
-            Logout
+            Sign Out
           </button>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      {/* MAIN */}
+  // ========================================================
+  // MAIN ADMIN PAGE
+  // ========================================================
 
-      <main
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f5f7fb",
+        padding: "24px 16px 50px",
+      }}
+    >
+      <div
         style={{
-          width: "min(700px, 92%)",
+          width: "100%",
+          maxWidth: "800px",
           margin: "0 auto",
-          padding: "45px 0 70px",
         }}
       >
+        {/* ==================================================
+            HEADER
+        ================================================== */}
+
         <div
           style={{
-            textAlign: "center",
-            marginBottom: 30,
+            background: "#ffffff",
+            borderRadius: "18px",
+            padding: "24px",
+            marginBottom: "18px",
+            boxShadow:
+              "0 8px 30px rgba(0,0,0,0.07)",
           }}
         >
           <div
             style={{
-              color: "#167447",
-              fontSize: 11,
-              fontWeight: 800,
-              letterSpacing: 1.5,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "15px",
+              flexWrap: "wrap",
             }}
           >
-            ADMIN PANEL
+            <div>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: "28px",
+                }}
+              >
+                Shubhodayam Bharath
+              </h1>
+
+              <p
+                style={{
+                  margin:
+                    "6px 0 0",
+                  color: "#666",
+                }}
+              >
+                Newspaper Administration
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={
+                uploading || deleting
+              }
+              style={{
+                padding:
+                  "10px 18px",
+                border: "none",
+                borderRadius: "9px",
+                background: "#111827",
+                color: "#ffffff",
+                fontWeight: 600,
+                cursor:
+                  uploading || deleting
+                    ? "not-allowed"
+                    : "pointer",
+                opacity:
+                  uploading || deleting
+                    ? 0.6
+                    : 1,
+              }}
+            >
+              Sign Out
+            </button>
           </div>
-
-          <h1
-            style={{
-              margin:
-                "7px 0 10px",
-              color: "#123c69",
-              fontFamily:
-                'Georgia, "Times New Roman", serif',
-              fontSize: 34,
-            }}
-          >
-            Manage Newspaper
-          </h1>
-
-          <p
-            style={{
-              margin: 0,
-              color: "#6b7280",
-            }}
-          >
-            Upload, replace, or delete daily
-            newspaper editions.
-          </p>
         </div>
 
-        {/* MANAGEMENT CARD */}
+        {/* ==================================================
+            ADMIN FORM
+        ================================================== */}
 
         <form
           onSubmit={handleUpload}
           style={{
             background: "#ffffff",
-            border:
-              "1px solid #dfe5eb",
-            borderRadius: 16,
-            padding: 30,
+            borderRadius: "18px",
+            padding: "24px",
             boxShadow:
-              "0 8px 25px rgba(0,0,0,0.06)",
+              "0 8px 30px rgba(0,0,0,0.07)",
           }}
         >
-          {/* DATE */}
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: "22px",
+            }}
+          >
+            Upload Newspaper
+          </h2>
+
+          {/* =================================================
+              DATE
+          ================================================= */}
 
           <div
             style={{
-              marginBottom: 24,
+              marginBottom: "20px",
             }}
           >
             <label
               htmlFor="newspaper-date"
-              style={labelStyle}
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: 600,
+              }}
             >
               Newspaper Date
             </label>
@@ -992,452 +1356,400 @@ export default function Admin() {
               id="newspaper-date"
               type="date"
               value={date}
-              onChange={(event) =>
-                setDate(
-                  event.target.value
-                )
-              }
+              onChange={(event) => {
+                setDate(event.target.value);
+                setFile(null);
+
+                if (fileInputRef.current) {
+                  fileInputRef.current.value =
+                    "";
+                }
+
+                setMessage("");
+                setMessageType("");
+              }}
               disabled={
-                uploading ||
-                deleting
+                uploading || deleting
               }
-              style={inputStyle}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "13px 14px",
+                border:
+                  "1px solid #d1d5db",
+                borderRadius: "10px",
+                fontSize: "16px",
+                background:
+                  uploading || deleting
+                    ? "#f3f4f6"
+                    : "#ffffff",
+              }}
             />
 
-            <p
-              style={helpTextStyle}
-            >
-              Select the date printed on
-              this newspaper.
-            </p>
-          </div>
-
-          {/* CHECKING */}
-
-          {date &&
-            checkingEdition && (
-              <div
+            {checkingEdition && (
+              <p
                 style={{
-                  marginBottom: 22,
-                  padding: 13,
-                  borderRadius: 9,
-                  background:
-                    "#f1f5f9",
-                  border:
-                    "1px solid #dbe3ea",
-                  color: "#64748b",
-                  fontSize: 13,
+                  margin:
+                    "8px 0 0",
+                  color: "#666",
+                  fontSize: "14px",
                 }}
               >
                 Checking this date...
-              </div>
+              </p>
             )}
+          </div>
 
-          {/* EXISTING */}
-
-          {date &&
-            !checkingEdition &&
-            existingEdition && (
-              <div
-                style={{
-                  marginBottom: 22,
-                  padding: 15,
-                  borderRadius: 9,
-                  background:
-                    "#fff8e7",
-                  border:
-                    "1px solid #f5d58a",
-                  color: "#8a5a00",
-                  fontSize: 14,
-                  lineHeight: 1.5,
-                }}
-              >
-                <strong>
-                  Existing newspaper found
-                </strong>
-
-                <div
-                  style={{
-                    marginTop: 5,
-                    fontSize: 13,
-                  }}
-                >
-                  A newspaper already
-                  exists for{" "}
-                  <strong>
-                    {date}
-                  </strong>
-                  . You can replace it
-                  with a new PDF or delete
-                  it.
-                </div>
-
-                {existingEdition.pdf_path && (
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: "#9a6700",
-                    }}
-                  >
-                    PDF:{" "}
-                    {
-                      existingEdition.pdf_path
-                    }
-                  </div>
-                )}
-              </div>
-            )}
-
-          {/* NO EXISTING */}
-
-          {date &&
-            !checkingEdition &&
-            !existingEdition && (
-              <div
-                style={{
-                  marginBottom: 22,
-                  padding: 15,
-                  borderRadius: 9,
-                  background:
-                    "#eef7f1",
-                  border:
-                    "1px solid #cce5d5",
-                  color: "#167447",
-                  fontSize: 14,
-                }}
-              >
-                ✓ No newspaper exists for{" "}
-                <strong>
-                  {date}
-                </strong>
-                . You can upload a new
-                edition.
-              </div>
-            )}
-
-          {/* FILE */}
+          {/* =================================================
+              FILE
+          ================================================= */}
 
           <div
             style={{
-              marginBottom: 24,
+              marginBottom: "20px",
             }}
           >
             <label
               htmlFor="newspaper-pdf"
-              style={labelStyle}
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontWeight: 600,
+              }}
             >
               Newspaper PDF
             </label>
 
             <input
+              ref={fileInputRef}
               id="newspaper-pdf"
               type="file"
-              accept="application/pdf,.pdf"
+              accept=".pdf,application/pdf"
+              onClick={(event) => {
+                // Important for mobile browsers:
+                // allows selecting the same PDF again.
+                event.currentTarget.value = "";
+              }}
               onChange={handleFileChange}
               disabled={
-                uploading ||
-                deleting
+                uploading || deleting
               }
               style={{
-                ...inputStyle,
-                padding: 10,
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "12px",
+                border:
+                  "1px solid #d1d5db",
+                borderRadius: "10px",
                 background:
-                  "#fafafa",
+                  uploading || deleting
+                    ? "#f3f4f6"
+                    : "#ffffff",
+                fontSize: "15px",
               }}
             />
 
+            {/* Selected file */}
             {file && (
               <div
                 style={{
-                  marginTop: 10,
-                  padding: 12,
-                  background:
-                    "#eef7f1",
+                  marginTop: "12px",
+                  padding: "13px 14px",
+                  borderRadius: "10px",
+                  background: "#ecfdf5",
                   border:
-                    "1px solid #cce5d5",
-                  borderRadius: 8,
-                  color: "#167447",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  wordBreak:
-                    "break-word",
+                    "1px solid #a7f3d0",
+                  color: "#065f46",
+                  wordBreak: "break-word",
                 }}
               >
-                ✓ Selected:{" "}
-                {file.name}
+                <strong>
+                  ✓ Selected PDF
+                </strong>
+
+                <div
+                  style={{
+                    marginTop: "4px",
+                    fontSize: "14px",
+                  }}
+                >
+                  {file.name}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "3px",
+                    fontSize: "13px",
+                    opacity: 0.8,
+                  }}
+                >
+                  {(
+                    file.size /
+                    (1024 * 1024)
+                  ).toFixed(2)}{" "}
+                  MB
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* =================================================
+              EXISTING EDITION INFO
+          ================================================= */}
+
+          {existingEdition && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "15px",
+                borderRadius: "10px",
+                background: "#fffbeb",
+                border:
+                  "1px solid #fde68a",
+                color: "#92400e",
+              }}
+            >
+              <strong>
+                Newspaper already exists
+              </strong>
+
+              <p
+                style={{
+                  margin:
+                    "6px 0 0",
+                  fontSize: "14px",
+                }}
+              >
+                A newspaper for{" "}
+                <strong>
+                  {date}
+                </strong>{" "}
+                already exists. Uploading will
+                replace the existing PDF.
+              </p>
+            </div>
+          )}
+
+          {/* =================================================
+              NEW EDITION INFO
+          ================================================= */}
+
+          {date &&
+            !existingEdition &&
+            !checkingEdition && (
+              <div
+                style={{
+                  marginBottom: "20px",
+                  padding: "15px",
+                  borderRadius: "10px",
+                  background: "#ecfdf5",
+                  border:
+                    "1px solid #a7f3d0",
+                  color: "#065f46",
+                }}
+              >
+                <strong>
+                  ✓ Date available
+                </strong>
+
+                <p
+                  style={{
+                    margin:
+                      "6px 0 0",
+                    fontSize: "14px",
+                  }}
+                >
+                  No newspaper exists for{" "}
+                  <strong>
+                    {date}
+                  </strong>
+                  .
+                </p>
               </div>
             )}
 
-            <p
-              style={helpTextStyle}
-            >
-              Only PDF files are accepted.
-            </p>
-          </div>
-
-          {/* MESSAGE */}
+          {/* =================================================
+              MESSAGE
+          ================================================= */}
 
           {message && (
             <div
               style={{
-                marginBottom: 22,
-                padding: 15,
-                borderRadius: 9,
+                marginBottom: "20px",
+                padding: "14px 15px",
+                borderRadius: "10px",
+
                 background:
-                  messageType ===
-                  "success"
-                    ? "#eef7f1"
-                    : messageType ===
-                      "info"
+                  messageType === "error"
+                    ? "#fef2f2"
+                    : messageType === "info"
                     ? "#eff6ff"
-                    : "#fff5f5",
+                    : "#ecfdf5",
+
                 border:
-                  messageType ===
-                  "success"
-                    ? "1px solid #b9dec6"
-                    : messageType ===
-                      "info"
+                  messageType === "error"
+                    ? "1px solid #fecaca"
+                    : messageType === "info"
                     ? "1px solid #bfdbfe"
-                    : "1px solid #fecaca",
+                    : "1px solid #a7f3d0",
+
                 color:
-                  messageType ===
-                  "success"
-                    ? "#167447"
-                    : messageType ===
-                      "info"
-                    ? "#1d4ed8"
-                    : "#b91c1c",
-                fontSize: 14,
-                lineHeight: 1.5,
+                  messageType === "error"
+                    ? "#991b1b"
+                    : messageType === "info"
+                    ? "#1e40af"
+                    : "#065f46",
+
+                wordBreak:
+                  "break-word",
               }}
             >
               {message}
             </div>
           )}
 
-          {/* SAVE BUTTON */}
+          {/* =================================================
+              BUTTONS
+          ================================================= */}
 
-          <button
-            type="submit"
-            disabled={
-              uploading ||
-              deleting ||
-              checkingEdition ||
-              !date ||
-              !file
-            }
+          <div
             style={{
-              width: "100%",
-              border: "none",
-              borderRadius: 9,
-              padding:
-                "14px 20px",
-              background:
-                uploading ||
-                deleting ||
-                checkingEdition ||
-                !date ||
-                !file
-                  ? "#94a3b8"
-                  : "#123c69",
-              color: "#ffffff",
-              fontSize: 15,
-              fontWeight: 700,
-              cursor:
-                uploading ||
-                deleting ||
-                checkingEdition ||
-                !date ||
-                !file
-                  ? "not-allowed"
-                  : "pointer",
+              display: "flex",
+              gap: "12px",
+              flexWrap: "wrap",
             }}
           >
-            {uploading
-              ? existingEdition
-                ? "Replacing newspaper..."
-                : "Uploading newspaper..."
-              : existingEdition
-              ? "Replace Newspaper"
-              : "Upload Newspaper"}
-          </button>
-
-          {/* DELETE BUTTON */}
-
-          {existingEdition && (
             <button
-              type="button"
-              onClick={handleDelete}
+              type="submit"
               disabled={
                 uploading ||
                 deleting ||
-                checkingEdition
+                checkingEdition ||
+                !date ||
+                !file
               }
               style={{
-                width: "100%",
-                border:
-                  "1px solid #dc2626",
-                borderRadius: 9,
+                flex: "1 1 220px",
+                minHeight: "48px",
                 padding:
-                  "13px 20px",
-                marginTop: 12,
+                  "12px 20px",
+                border: "none",
+                borderRadius: "10px",
                 background:
-                  deleting ||
                   uploading ||
-                  checkingEdition
-                    ? "#fca5a5"
-                    : "#ffffff",
-                color:
                   deleting ||
-                  uploading ||
-                  checkingEdition
-                    ? "#ffffff"
-                    : "#b91c1c",
-                fontSize: 15,
+                  checkingEdition ||
+                  !date ||
+                  !file
+                    ? "#9ca3af"
+                    : "#111827",
+                color: "#ffffff",
+                fontSize: "16px",
                 fontWeight: 700,
                 cursor:
-                  deleting ||
                   uploading ||
-                  checkingEdition
+                  deleting ||
+                  checkingEdition ||
+                  !date ||
+                  !file
                     ? "not-allowed"
                     : "pointer",
               }}
             >
-              {deleting
-                ? "Deleting newspaper..."
-                : "Delete Newspaper"}
+              {uploading
+                ? "Uploading..."
+                : existingEdition
+                ? "Replace Newspaper"
+                : "Upload Newspaper"}
             </button>
-          )}
+
+            {existingEdition && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={
+                  uploading || deleting
+                }
+                style={{
+                  flex:
+                    "1 1 160px",
+                  minHeight: "48px",
+                  padding:
+                    "12px 20px",
+                  border:
+                    "1px solid #dc2626",
+                  borderRadius: "10px",
+                  background:
+                    uploading ||
+                    deleting
+                      ? "#f3f4f6"
+                      : "#ffffff",
+                  color: "#dc2626",
+                  fontSize: "16px",
+                  fontWeight: 700,
+                  cursor:
+                    uploading ||
+                    deleting
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {deleting
+                  ? "Deleting..."
+                  : "Delete Newspaper"}
+              </button>
+            )}
+          </div>
+
+          {/* =================================================
+              MOBILE HELP
+          ================================================= */}
+
+          <div
+            style={{
+              marginTop: "20px",
+              padding: "13px 14px",
+              borderRadius: "10px",
+              background: "#f8fafc",
+              border:
+                "1px solid #e2e8f0",
+              color: "#475569",
+              fontSize: "13px",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>
+              Mobile upload:
+            </strong>{" "}
+            On Android or iPhone, tap the PDF field and
+            select your newspaper PDF from the device's
+            Files/Downloads app. After selection, the
+            filename should appear above the Upload button.
+          </div>
         </form>
 
-        {/* INFORMATION */}
+        {/* ==================================================
+            BACK TO WEBSITE
+        ================================================== */}
 
         <div
           style={{
-            marginTop: 20,
-            padding: 20,
-            background: "#ffffff",
-            border:
-              "1px solid #e1e6eb",
-            borderRadius: 12,
+            textAlign: "center",
+            marginTop: "22px",
           }}
         >
-          <strong
+          <Link
+            to="/"
             style={{
-              color: "#123c69",
+              color: "#374151",
+              textDecoration: "none",
+              fontWeight: 600,
             }}
           >
-            Newspaper management
-          </strong>
-
-          <ol
-            style={{
-              marginBottom: 0,
-              color: "#6b7280",
-              lineHeight: 1.8,
-              paddingLeft: 22,
-            }}
-          >
-            <li>
-              Select the newspaper date.
-            </li>
-
-            <li>
-              If no edition exists,
-              select a PDF and upload
-              it.
-            </li>
-
-            <li>
-              If an edition already
-              exists, select a new PDF
-              and replace it.
-            </li>
-
-            <li>
-              Delete an existing
-              newspaper using the
-              Delete Newspaper button.
-            </li>
-
-            <li>
-              Deleting removes the PDF
-              from Supabase Storage and
-              removes the edition from
-              the Calendar.
-            </li>
-
-            <li>
-              Only administrator
-              accounts can perform these
-              operations.
-            </li>
-          </ol>
+            ← Back to Website
+          </Link>
         </div>
-      </main>
-
-      {/* FOOTER */}
-
-      <footer
-        style={{
-          padding: 25,
-          background: "#ffffff",
-          borderTop:
-            "1px solid #e5e7eb",
-          textAlign: "center",
-          color: "#6b7280",
-          fontSize: 13,
-        }}
-      >
-        ©️{" "}
-        {new Date().getFullYear()}{" "}
-        Shubhodayam Bharath
-      </footer>
+      </div>
     </div>
   );
 }
-
-/*
- * =========================================================
- * STYLES
- * =========================================================
- */
-
-function navButtonStyle() {
-  return {
-    display: "inline-block",
-    textDecoration: "none",
-    padding: "9px 14px",
-    borderRadius: 7,
-    background: "#eef3f8",
-    color: "#123c69",
-    fontWeight: 700,
-    fontSize: 13,
-  };
-}
-
-const labelStyle = {
-  display: "block",
-  marginBottom: 8,
-  color: "#123c69",
-  fontSize: 14,
-  fontWeight: 700,
-};
-
-const inputStyle = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid #d1d9e2",
-  borderRadius: 8,
-  padding: "12px 13px",
-  background: "#ffffff",
-  color: "#1f2937",
-  fontSize: 14,
-};
-
-const helpTextStyle = {
-  margin: "7px 0 0",
-  color: "#8a94a3",
-  fontSize: 12,
-};
