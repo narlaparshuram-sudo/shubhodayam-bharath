@@ -88,6 +88,12 @@ function NewspaperViewer({ edition }) {
       height: 0,
     })
 
+  const [sharing, setSharing] =
+    useState(false)
+
+  const [shareMessage, setShareMessage] =
+    useState("")
+
   // ========================================================
   // LOAD PDF
   // ========================================================
@@ -157,7 +163,8 @@ function NewspaperViewer({ edition }) {
         if (cancelled) {
           if (
             pdf &&
-            typeof pdf.destroy === "function"
+            typeof pdf.destroy ===
+              "function"
           ) {
             try {
               await pdf.destroy()
@@ -925,6 +932,165 @@ function NewspaperViewer({ edition }) {
   }
 
   // ========================================================
+  // DOWNLOAD NEWSPAPER
+  // ========================================================
+
+  function downloadNewspaper() {
+    const pdfUrl =
+      getPdfUrl(edition)
+
+    if (!pdfUrl) {
+      return
+    }
+
+    const editionDate =
+      edition?.date ||
+      "newspaper"
+
+    const fileName =
+      `${editionDate}-shubhodayam-bharath.pdf`
+
+    const link =
+      document.createElement(
+        "a"
+      )
+
+    link.href = pdfUrl
+    link.download = fileName
+    link.target = "_blank"
+    link.rel = "noopener noreferrer"
+
+    document.body.appendChild(
+      link
+    )
+
+    link.click()
+
+    document.body.removeChild(
+      link
+    )
+  }
+
+  // ========================================================
+  // SHARE NEWSPAPER
+  // ========================================================
+
+  async function shareNewspaper() {
+    const pdfUrl =
+      getPdfUrl(edition)
+
+    if (!pdfUrl) {
+      return
+    }
+
+    const editionDate =
+      edition?.date ||
+      ""
+
+    const title =
+      "Shubhodayam Bharath"
+
+    const text =
+      editionDate
+        ? `Shubhodayam Bharath - Newspaper Edition ${editionDate}`
+        : "Shubhodayam Bharath Newspaper"
+
+    try {
+      setSharing(true)
+      setShareMessage("")
+
+      // ----------------------------------------------------
+      // Native mobile share
+      // ----------------------------------------------------
+
+      if (
+        navigator.share
+      ) {
+        await navigator.share({
+          title,
+          text,
+          url: pdfUrl,
+        })
+
+        return
+      }
+
+      // ----------------------------------------------------
+      // Clipboard fallback
+      // ----------------------------------------------------
+
+      if (
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText ===
+          "function"
+      ) {
+        await navigator.clipboard.writeText(
+          pdfUrl
+        )
+
+        setShareMessage(
+          "Newspaper link copied."
+        )
+
+        setTimeout(() => {
+          setShareMessage("")
+        }, 2500)
+
+        return
+      }
+
+      // ----------------------------------------------------
+      // Older browser fallback
+      // ----------------------------------------------------
+
+      window.prompt(
+        "Copy newspaper link:",
+        pdfUrl
+      )
+    } catch (err) {
+      // User cancelling native share is not an error
+      if (
+        err?.name ===
+        "AbortError"
+      ) {
+        return
+      }
+
+      console.error(
+        "SHARE ERROR:",
+        err
+      )
+
+      // Try clipboard if native sharing fails
+      try {
+        if (
+          navigator.clipboard &&
+          typeof navigator.clipboard.writeText ===
+            "function"
+        ) {
+          await navigator.clipboard.writeText(
+            pdfUrl
+          )
+
+          setShareMessage(
+            "Newspaper link copied."
+          )
+
+          setTimeout(() => {
+            setShareMessage("")
+          }, 2500)
+        }
+      } catch {
+        setShareMessage(
+          "Unable to share the newspaper."
+        )
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  // ========================================================
   // LOADING
   // ========================================================
 
@@ -1017,23 +1183,38 @@ function NewspaperViewer({ edition }) {
       }}
     >
       {/* ====================================================
-          TOOLBAR
+          TOP TOOLBAR
       ==================================================== */}
 
       <div className="newspaper-toolbar">
+
+        {/* ZOOM OUT */}
+
         <button
           type="button"
-          onClick={
-            previousPage
+          onClick={() =>
+            setZoom(
+              (value) =>
+                Math.max(
+                  MIN_ZOOM,
+                  Number(
+                    (
+                      value - 0.1
+                    ).toFixed(2)
+                  )
+                )
+            )
           }
           disabled={
-            currentPage <= 1
+            zoom <= MIN_ZOOM
           }
           className="viewer-nav-button"
-          aria-label="Previous page"
+          aria-label="Zoom out"
         >
-          ←
+          −
         </button>
+
+        {/* PAGE */}
 
         <div className="viewer-page-info">
           <span>
@@ -1050,33 +1231,33 @@ function NewspaperViewer({ edition }) {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={
-            nextPage
-          }
-          disabled={
-            currentPage >=
-            totalPages
-          }
-          className="viewer-nav-button"
-          aria-label="Next page"
-        >
-          →
-        </button>
+        {/* ZOOM IN */}
 
         <button
           type="button"
-          onClick={
-            openCropEditor
+          onClick={() =>
+            setZoom(
+              (value) =>
+                Math.min(
+                  MAX_ZOOM,
+                  Number(
+                    (
+                      value + 0.1
+                    ).toFixed(2)
+                  )
+                )
+            )
           }
           disabled={
-            !pdfDocument
+            zoom >= MAX_ZOOM
           }
-          className="viewer-crop-button"
+          className="viewer-nav-button"
+          aria-label="Zoom in"
         >
-          Crop
+          +
         </button>
+
+        {/* RESET */}
 
         <button
           type="button"
@@ -1090,7 +1271,7 @@ function NewspaperViewer({ edition }) {
       </div>
 
       {/* ====================================================
-          PDF AREA
+          NEWSPAPER AREA
       ==================================================== */}
 
       <div
@@ -1110,20 +1291,26 @@ function NewspaperViewer({ edition }) {
         onTouchCancel={
           handleTouchEnd
         }
+        style={{
+          position:
+            "relative",
+        }}
       >
+        {/* --------------------------------------------------
+            PDF
+        -------------------------------------------------- */}
+
         <canvas
           ref={
             canvasRef
           }
           className="newspaper-pdf-canvas"
         />
-      </div>
 
-      {/* ====================================================
-          BOTTOM PAGE NAVIGATION
-      ==================================================== */}
+        {/* ==================================================
+            PREVIOUS BUTTON ON PAPER
+        ================================================== */}
 
-      <div className="newspaper-bottom-navigation">
         <button
           type="button"
           onClick={
@@ -1132,16 +1319,21 @@ function NewspaperViewer({ edition }) {
           disabled={
             currentPage <= 1
           }
-          className="bottom-page-button"
+          aria-label="Previous newspaper page"
+          className="newspaper-paper-nav newspaper-paper-nav-prev"
         >
-          ← Previous
+          <span className="paper-nav-arrow">
+            ←
+          </span>
+
+          <span className="paper-nav-text">
+            Previous
+          </span>
         </button>
 
-        <div className="bottom-page-number">
-          {currentPage}{" "}
-          /{" "}
-          {totalPages}
-        </div>
+        {/* ==================================================
+            NEXT BUTTON ON PAPER
+        ================================================== */}
 
         <button
           type="button"
@@ -1152,10 +1344,116 @@ function NewspaperViewer({ edition }) {
             currentPage >=
             totalPages
           }
-          className="bottom-page-button"
+          aria-label="Next newspaper page"
+          className="newspaper-paper-nav newspaper-paper-nav-next"
         >
-          Next →
+          <span className="paper-nav-text">
+            Next
+          </span>
+
+          <span className="paper-nav-arrow">
+            →
+          </span>
         </button>
+      </div>
+
+      {/* ====================================================
+          SHARE MESSAGE
+      ==================================================== */}
+
+      {shareMessage && (
+        <div
+          className="newspaper-share-message"
+        >
+          {shareMessage}
+        </div>
+      )}
+
+      {/* ====================================================
+          ACTION BUTTONS
+      ==================================================== */}
+
+      <div className="newspaper-action-bar">
+
+        {/* DOWNLOAD */}
+
+        <button
+          type="button"
+          onClick={
+            downloadNewspaper
+          }
+          disabled={
+            !pdfDocument
+          }
+          className="newspaper-action-button"
+          aria-label="Download newspaper"
+        >
+          <span className="newspaper-action-icon">
+            ↓
+          </span>
+
+          <span>
+            Download
+          </span>
+        </button>
+
+        {/* SHARE */}
+
+        <button
+          type="button"
+          onClick={
+            shareNewspaper
+          }
+          disabled={
+            !pdfDocument ||
+            sharing
+          }
+          className="newspaper-action-button"
+          aria-label="Share newspaper"
+        >
+          <span className="newspaper-action-icon">
+            ↗
+          </span>
+
+          <span>
+            {sharing
+              ? "Sharing..."
+              : "Share"}
+          </span>
+        </button>
+
+        {/* CROP */}
+
+        <button
+          type="button"
+          onClick={
+            openCropEditor
+          }
+          disabled={
+            !pdfDocument
+          }
+          className="newspaper-action-button"
+          aria-label="Crop newspaper"
+        >
+          <span className="newspaper-action-icon">
+            ⛶
+          </span>
+
+          <span>
+            Crop
+          </span>
+        </button>
+      </div>
+
+      {/* ====================================================
+          PAGE INDICATOR
+      ==================================================== */}
+
+      <div className="newspaper-page-indicator">
+        Page{" "}
+        {currentPage}{" "}
+        of{" "}
+        {totalPages}
       </div>
     </section>
   )
