@@ -4,6 +4,12 @@ import Header from "../../components/Header"
 import NewspaperViewer from "../../components/NewspaperViewer/NewspaperViewer"
 import { supabase } from "../../lib/supabase"
 
+const SITE_URL =
+  "https://shubhodayam-bharath.vercel.app"
+
+const SITE_NAME =
+  "Shubhodayam Bharath"
+
 function Newspaper() {
   const { date } = useParams()
   const navigate = useNavigate()
@@ -43,45 +49,225 @@ function Newspaper() {
   }, [])
 
   // ==========================================================
-  // SEO
+  // SEO + SOCIAL SHARE PREVIEW
   // ==========================================================
 
   useEffect(() => {
-    if (!date) {
-      document.title = isTelugu
+    const pageUrl = date
+      ? `${SITE_URL}/newspaper/${date}`
+      : SITE_URL
+
+    const pageTitle = date
+      ? isTelugu
+        ? `శుభోదయం భారత్ – ${date} వార్తాపత్రిక`
+        : `Shubhodayam Bharath – ${date} Newspaper`
+      : isTelugu
         ? "శుభోదయం భారత్ – వార్తాపత్రిక"
         : "Shubhodayam Bharath – Newspaper"
 
-      return
+    const description = date
+      ? isTelugu
+        ? `${date} తేదీ శుభోదయం భారత్ తెలుగు మరియు ఇంగ్లీష్ దినపత్రిక సంచికను ఆన్‌లైన్‌లో చదవండి.`
+        : `Read the Shubhodayam Bharath Telugu and English daily newspaper edition for ${date} online.`
+      : isTelugu
+        ? "శుభోదయం భారత్ దినపత్రికను ఆన్‌లైన్‌లో చదవండి."
+        : "Read Shubhodayam Bharath daily newspaper online."
+
+    // --------------------------------------------------------
+    // Newspaper thumbnail
+    // --------------------------------------------------------
+
+    let thumbnailUrl = ""
+
+    if (date) {
+      const {
+        data: thumbnailData,
+      } = supabase.storage
+        .from("newspapers")
+        .getPublicUrl(
+          `thumbnails/${date}.jpg`
+        )
+
+      thumbnailUrl =
+        thumbnailData?.publicUrl || ""
     }
 
-    document.title = isTelugu
-      ? `శుభోదయం భారత్ – ${date} వార్తాపత్రిక`
-      : `Shubhodayam Bharath – ${date} Newspaper`
+    document.title = pageTitle
 
-    const description = isTelugu
-      ? `${date} తేదీ శుభోదయం భారత్ తెలుగు మరియు ఇంగ్లీష్ దినపత్రిక సంచికను ఆన్‌లైన్‌లో చదవండి.`
-      : `Read the Shubhodayam Bharath Telugu and English daily newspaper edition for ${date} online.`
+    // --------------------------------------------------------
+    // Helper for meta tags
+    // --------------------------------------------------------
 
-    let metaDescription =
-      document.querySelector(
-        'meta[name="description"]'
+    function setMetaTag(
+      attribute,
+      attributeValue,
+      content
+    ) {
+      if (!content) {
+        return
+      }
+
+      let element =
+        document.querySelector(
+          `meta[${attribute}="${attributeValue}"]`
+        )
+
+      if (!element) {
+        element =
+          document.createElement("meta")
+
+        element.setAttribute(
+          attribute,
+          attributeValue
+        )
+
+        document.head.appendChild(
+          element
+        )
+      }
+
+      element.setAttribute(
+        "content",
+        content
+      )
+    }
+
+    // --------------------------------------------------------
+    // Standard description
+    // --------------------------------------------------------
+
+    setMetaTag(
+      "name",
+      "description",
+      description
+    )
+
+    // --------------------------------------------------------
+    // Open Graph
+    // --------------------------------------------------------
+
+    setMetaTag(
+      "property",
+      "og:type",
+      "article"
+    )
+
+    setMetaTag(
+      "property",
+      "og:title",
+      pageTitle
+    )
+
+    setMetaTag(
+      "property",
+      "og:description",
+      description
+    )
+
+    setMetaTag(
+      "property",
+      "og:url",
+      pageUrl
+    )
+
+    setMetaTag(
+      "property",
+      "og:site_name",
+      SITE_NAME
+    )
+
+    if (thumbnailUrl) {
+      setMetaTag(
+        "property",
+        "og:image",
+        thumbnailUrl
       )
 
-    if (!metaDescription) {
-      metaDescription =
-        document.createElement("meta")
+      setMetaTag(
+        "property",
+        "og:image:secure_url",
+        thumbnailUrl
+      )
 
-      metaDescription.setAttribute(
+      setMetaTag(
+        "property",
+        "og:image:type",
+        "image/jpeg"
+      )
+
+      setMetaTag(
+        "property",
+        "og:image:alt",
+        `${SITE_NAME} ${date || ""} Newspaper`
+      )
+    }
+
+    // --------------------------------------------------------
+    // Twitter / X
+    // --------------------------------------------------------
+
+    setMetaTag(
+      "name",
+      "twitter:card",
+      "summary_large_image"
+    )
+
+    setMetaTag(
+      "name",
+      "twitter:title",
+      pageTitle
+    )
+
+    setMetaTag(
+      "name",
+      "twitter:description",
+      description
+    )
+
+    if (thumbnailUrl) {
+      setMetaTag(
         "name",
-        "description"
+        "twitter:image",
+        thumbnailUrl
       )
-      // ========================================================
-    // STRUCTURED DATA
-    // ========================================================
+    }
+
+    // --------------------------------------------------------
+    // Canonical URL
+    // --------------------------------------------------------
+
+    let canonical =
+      document.querySelector(
+        'link[rel="canonical"]'
+      )
+
+    if (!canonical) {
+      canonical =
+        document.createElement("link")
+
+      canonical.setAttribute(
+        "rel",
+        "canonical"
+      )
+
+      document.head.appendChild(
+        canonical
+      )
+    }
+
+    canonical.setAttribute(
+      "href",
+      pageUrl
+    )
+
+    // --------------------------------------------------------
+    // Structured data
+    // --------------------------------------------------------
 
     const existingSchema =
-      document.getElementById("newspaper-schema")
+      document.getElementById(
+        "newspaper-schema"
+      )
 
     if (existingSchema) {
       existingSchema.remove()
@@ -89,42 +275,62 @@ function Newspaper() {
 
     const schema = {
       "@context": "https://schema.org",
-      "@type": "WebPage",
-      "name": document.title,
+      "@type": "NewsArticle",
+      "headline": pageTitle,
       "description": description,
-      "url": `https://shubhodayam-bharath.vercel.app/newspaper/${date}`,
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "Shubhodayam Bharath",
-        "url": "https://shubhodayam-bharath.vercel.app/"
-      },
+      "url": pageUrl,
+      "datePublished": date || undefined,
+      "image": thumbnailUrl
+        ? [thumbnailUrl]
+        : undefined,
       "publisher": {
         "@type": "Organization",
-        "name": "Shubhodayam Bharath",
-        "url": "https://shubhodayam-bharath.vercel.app/"
+        "name": SITE_NAME,
+        "url": SITE_URL,
       },
-      "datePublished": date
+      "isPartOf": {
+        "@type": "WebSite",
+        "name": SITE_NAME,
+        "url": `${SITE_URL}/`,
+      },
     }
 
-    const script =
+    const schemaScript =
       document.createElement("script")
 
-    script.id = "newspaper-schema"
-    script.type = "application/ld+json"
-    script.textContent =
+    schemaScript.id =
+      "newspaper-schema"
+
+    schemaScript.type =
+      "application/ld+json"
+
+    schemaScript.textContent =
       JSON.stringify(schema)
 
-    document.head.appendChild(script)
-
-      document.head.appendChild(
-        metaDescription
-      )
-    }
-
-    metaDescription.setAttribute(
-      "content",
-      description
+    document.head.appendChild(
+      schemaScript
     )
+
+    console.log(
+      "SHARE PAGE URL:",
+      pageUrl
+    )
+
+    console.log(
+      "SHARE THUMBNAIL URL:",
+      thumbnailUrl
+    )
+
+    return () => {
+      const schemaToRemove =
+        document.getElementById(
+          "newspaper-schema"
+        )
+
+      if (schemaToRemove) {
+        schemaToRemove.remove()
+      }
+    }
   }, [date, isTelugu])
 
   // ==========================================================
@@ -133,15 +339,20 @@ function Newspaper() {
 
   useEffect(() => {
     async function loadEditions() {
-      const { data, error } = await supabase
+      const {
+        data,
+        error: editionsError,
+      } = await supabase
         .from("editions")
         .select("*")
-        .order("date", { ascending: true })
+        .order("date", {
+          ascending: true,
+        })
 
-      if (error) {
+      if (editionsError) {
         console.error(
           "Editions navigation error:",
-          error
+          editionsError
         )
 
         setEditions([])
@@ -254,6 +465,26 @@ function Newspaper() {
             publicUrlData?.publicUrl || ""
         }
 
+        // ======================================================
+        // CREATE THUMBNAIL URL
+        // ======================================================
+
+        const {
+          data: thumbnailData,
+        } = supabase.storage
+          .from("newspapers")
+          .getPublicUrl(
+            `thumbnails/${date}.jpg`
+          )
+
+        data.thumbnail_url =
+          thumbnailData?.publicUrl || ""
+
+        console.log(
+          "THUMBNAIL URL:",
+          data.thumbnail_url
+        )
+
         setEdition(data)
 
       } catch (err) {
@@ -281,7 +512,8 @@ function Newspaper() {
 
   const currentIndex =
     editions.findIndex(
-      (item) => item.date === date
+      (item) =>
+        item.date === date
     )
 
   const previousEdition =
@@ -296,8 +528,12 @@ function Newspaper() {
       ? editions[currentIndex + 1]
       : null
 
-  function goToEdition(targetDate) {
-    if (!targetDate) return
+  function goToEdition(
+    targetDate
+  ) {
+    if (!targetDate) {
+      return
+    }
 
     navigate(
       `/newspaper/${targetDate}`
@@ -319,7 +555,6 @@ function Newspaper() {
         <Header />
 
         <main className="home-main">
-
           <section className="calendar-page">
 
             <div className="section-heading newspaper-loading">
@@ -341,7 +576,6 @@ function Newspaper() {
             </div>
 
           </section>
-
         </main>
       </>
     )
@@ -357,7 +591,6 @@ function Newspaper() {
         <Header />
 
         <main className="home-main">
-
           <section className="calendar-page">
 
             <div className="section-heading">
@@ -389,7 +622,6 @@ function Newspaper() {
             </div>
 
           </section>
-
         </main>
       </>
     )
@@ -407,7 +639,9 @@ function Newspaper() {
 
         <section className="calendar-page">
 
-          {/* BACK TO CALENDAR */}
+          {/* ==================================================
+              BACK TO CALENDAR
+          ================================================== */}
 
           <div className="section-heading">
 
@@ -450,7 +684,9 @@ function Newspaper() {
                   previousEdition?.date
                 )
               }
-              disabled={!previousEdition}
+              disabled={
+                !previousEdition
+              }
               style={{
                 flex: 1,
                 padding: "11px 14px",
@@ -519,7 +755,9 @@ function Newspaper() {
                   nextEdition?.date
                 )
               }
-              disabled={!nextEdition}
+              disabled={
+                !nextEdition
+              }
               style={{
                 flex: 1,
                 padding: "11px 14px",
@@ -547,7 +785,9 @@ function Newspaper() {
 
           </div>
 
-          {/* NEWSPAPER VIEWER */}
+          {/* ==================================================
+              NEWSPAPER VIEWER
+          ================================================== */}
 
           <NewspaperViewer
             edition={edition}
