@@ -42,6 +42,16 @@ function getPdfUrl(edition) {
     return ""
   }
 
+  // R2 stores the complete public PDF URL in pdf_path.
+  // Use it directly when it is already a full URL.
+  if (
+    typeof edition.pdf_path === "string" &&
+    /^https?:\/\//i.test(edition.pdf_path)
+  ) {
+    return edition.pdf_path
+  }
+
+  // Keep compatibility with older editions.
   return (
     edition.pdf_url ||
     edition.pdfUrl ||
