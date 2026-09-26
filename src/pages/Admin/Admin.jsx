@@ -730,8 +730,6 @@ export default function Admin() {
               headers: {
                 "Content-Type":
                   "application/json",
-                Authorization:
-                  `Bearer ${session.access_token}`,
               },
               body: JSON.stringify(
                 {
@@ -943,8 +941,6 @@ export default function Admin() {
             headers: {
               "Content-Type":
                 "application/json",
-                Authorization:
-                  `Bearer ${session.access_token}`,
             },
             body: JSON.stringify(
               {
@@ -1205,11 +1201,7 @@ export default function Admin() {
       setMessage(
         "Your admin session has expired. Please sign in again."
       );
-
-      setMessageType(
-        "error"
-      );
-
+      setMessageType("error");
       return;
     }
 
@@ -1217,11 +1209,7 @@ export default function Admin() {
       setMessage(
         "You do not have administrator access."
       );
-
-      setMessageType(
-        "error"
-      );
-
+      setMessageType("error");
       return;
     }
 
@@ -1229,18 +1217,13 @@ export default function Admin() {
       setMessage(
         "There is no newspaper to delete for this date."
       );
-
-      setMessageType(
-        "error"
-      );
-
+      setMessageType("error");
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Are you sure you want to delete the newspaper for ${date}? This cannot be undone.`
-      );
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the newspaper for ${date}? This cannot be undone.`
+    );
 
     if (!confirmed) {
       return;
@@ -1248,119 +1231,166 @@ export default function Admin() {
 
     try {
       setDeleting(true);
-
-      setMessage(
-        "Deleting newspaper..."
-      );
-
-      setMessageType(
-        "info"
-      );
+      setMessage("Deleting newspaper...");
+      setMessageType("info");
 
       const filePath =
         existingEdition.pdf_path ||
         `${date}.pdf`;
 
-      // ------------------------------------------------------
-      // IMPORTANT:
-      // Do not attempt to delete the R2 PDF from the browser.
-      // R2 credentials must never be exposed here.
-      //
-      // For now, this function stops before deleting the PDF.
-      // We will add /api/R2Delete next.
-      // ------------------------------------------------------
+      // ====================================================
+      // CLOUDFLARE R2 PDF
+      // ====================================================
 
       if (
-        filePath.includes(
-          ".r2.dev/"
-        )
+        typeof filePath === "string" &&
+        /^https?:\/\//i.test(filePath) &&
+        filePath.includes(".r2.dev/")
       ) {
-        setMessage(
-          "R2 newspaper deletion is not enabled yet. We will add the secure R2 delete function next."
+        let r2FileName = "";
+
+        try {
+          const r2Url = new URL(filePath);
+
+          r2FileName = decodeURIComponent(
+            r2Url.pathname
+              .split("/")
+              .filter(Boolean)
+              .pop() || ""
+          );
+        } catch (urlError) {
+          console.error(
+            "Invalid R2 PDF URL:",
+            urlError
+          );
+
+          throw new Error(
+            "The newspaper PDF URL is invalid."
+          );
+        }
+
+        if (!r2FileName) {
+          throw new Error(
+            "Unable to determine the R2 PDF filename."
+          );
+        }
+
+        if (!r2FileName.toLowerCase().endsWith(".pdf")) {
+          throw new Error(
+            "The R2 file is not a PDF."
+          );
+        }
+
+        console.log(
+          "Deleting R2 PDF:",
+          r2FileName
         );
 
-        setMessageType(
-          "info"
+        const r2DeleteResponse = await fetch(
+          "/api/R2Delete",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              fileName: r2FileName,
+            }),
+          }
         );
 
-        return;
+        let r2DeleteData = null;
+
+        try {
+          r2DeleteData =
+            await r2DeleteResponse.json();
+        } catch {
+          throw new Error(
+            `R2 delete server returned an invalid response (${r2DeleteResponse.status}).`
+          );
+        }
+
+        if (
+          !r2DeleteResponse.ok ||
+          !r2DeleteData?.success
+        ) {
+          console.error(
+            "R2 delete API error:",
+            r2DeleteData
+          );
+
+          throw new Error(
+            r2DeleteData?.error ||
+              `Unable to delete R2 PDF (${r2DeleteResponse.status}).`
+          );
+        }
+
+        console.log(
+          "R2 PDF deleted successfully:",
+          r2FileName
+        );
       }
 
-      // ------------------------------------------------------
-      // Legacy Supabase PDF
-      // ------------------------------------------------------
+      // ====================================================
+      // LEGACY SUPABASE PDF
+      // ====================================================
 
-      const {
-        error:
-          storageDeleteError,
-      } =
-        await supabase.storage
+      else {
+        const {
+          error: storageDeleteError,
+        } = await supabase.storage
           .from("newspapers")
-          .remove([
-            filePath,
-          ]);
+          .remove([filePath]);
 
-      if (
-        storageDeleteError
-      ) {
-        console.error(
-          "PDF delete error:",
-          storageDeleteError
+        if (storageDeleteError) {
+          console.error(
+            "PDF delete error:",
+            storageDeleteError
+          );
+
+          throw storageDeleteError;
+        }
+
+        console.log(
+          "Legacy Supabase PDF deleted:",
+          filePath
         );
-
-        throw storageDeleteError;
       }
 
-      console.log(
-        "Legacy Supabase PDF deleted:",
-        filePath
-      );
-
-      // ------------------------------------------------------
-      // Delete thumbnail
-      // ------------------------------------------------------
+      // ====================================================
+      // DELETE THUMBNAIL
+      // ====================================================
 
       const thumbnailPath =
         `thumbnails/${date}.jpg`;
 
       const {
-        error:
-          thumbnailDeleteError,
-      } =
-        await supabase.storage
-          .from("newspapers")
-          .remove([
-            thumbnailPath,
-          ]);
+        error: thumbnailDeleteError,
+      } = await supabase.storage
+        .from("newspapers")
+        .remove([thumbnailPath]);
 
-      if (
-        thumbnailDeleteError
-      ) {
+      if (thumbnailDeleteError) {
         console.warn(
           "Thumbnail delete warning:",
           thumbnailDeleteError
         );
       }
 
-      // ------------------------------------------------------
-      // Delete database edition
-      // ------------------------------------------------------
+      // ====================================================
+      // DELETE DATABASE EDITION
+      // ====================================================
 
       const {
-        error:
-          editionDeleteError,
-      } =
-        await supabase
-          .from("editions")
-          .delete()
-          .eq(
-            "id",
-            existingEdition.id
-          );
+        error: editionDeleteError,
+      } = await supabase
+        .from("editions")
+        .delete()
+        .eq("id", existingEdition.id);
 
-      if (
-        editionDeleteError
-      ) {
+      if (editionDeleteError) {
         console.error(
           "Edition database delete error:",
           editionDeleteError
@@ -1373,30 +1403,22 @@ export default function Admin() {
         "Edition deleted from database."
       );
 
-      // ------------------------------------------------------
-      // Clear state
-      // ------------------------------------------------------
+      // ====================================================
+      // CLEAR STATE
+      // ====================================================
 
-      setExistingEdition(
-        null
-      );
-
+      setExistingEdition(null);
       setFile(null);
 
-      if (
-        fileInputRef.current
-      ) {
-        fileInputRef.current.value =
-          "";
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
 
       setMessage(
         `${date} newspaper deleted successfully.`
       );
 
-      setMessageType(
-        "success"
-      );
+      setMessageType("success");
     } catch (error) {
       console.error(
         "Delete error:",
@@ -1409,9 +1431,7 @@ export default function Admin() {
           : "Newspaper deletion failed."
       );
 
-      setMessageType(
-        "error"
-      );
+      setMessageType("error");
     } finally {
       setDeleting(false);
     }
