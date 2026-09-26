@@ -34,6 +34,12 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// IMPORTANT:
+// This key is used ONLY on the Vercel server.
+// Never put this key in frontend React code.
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 // ==========================================================
 // R2 CLIENT
 // ==========================================================
@@ -60,7 +66,6 @@ export default async function handler(
   req,
   res
 ) {
-
   // --------------------------------------------------------
   // CORS
   // --------------------------------------------------------
@@ -106,9 +111,8 @@ export default async function handler(
   }
 
   try {
-
     // ------------------------------------------------------
-    // CHECK ENVIRONMENT VARIABLES
+    // CHECK SERVER ENVIRONMENT VARIABLES
     // ------------------------------------------------------
 
     if (
@@ -116,9 +120,9 @@ export default async function handler(
       !ACCESS_KEY_ID ||
       !SECRET_ACCESS_KEY ||
       !SUPABASE_URL ||
-      !SUPABASE_PUBLISHABLE_KEY
+      !SUPABASE_PUBLISHABLE_KEY ||
+      !SUPABASE_SERVICE_ROLE_KEY
     ) {
-
       console.error(
         "Required server environment variables are missing."
       );
@@ -142,7 +146,6 @@ export default async function handler(
         "Bearer "
       )
     ) {
-
       return res.status(401).json({
         error:
           "Authentication required.",
@@ -155,7 +158,6 @@ export default async function handler(
         .trim();
 
     if (!accessToken) {
-
       return res.status(401).json({
         error:
           "Authentication required.",
@@ -163,10 +165,10 @@ export default async function handler(
     }
 
     // ------------------------------------------------------
-    // SUPABASE AUTH CLIENT
+    // VERIFY LOGIN SESSION
     // ------------------------------------------------------
 
-    const supabase =
+    const supabaseAuth =
       createClient(
         SUPABASE_URL,
         SUPABASE_PUBLISHABLE_KEY,
@@ -181,17 +183,13 @@ export default async function handler(
         }
       );
 
-    // ------------------------------------------------------
-    // VERIFY SUPABASE USER
-    // ------------------------------------------------------
-
     const {
       data: {
         user,
       },
       error: authError,
     } =
-      await supabase.auth.getUser(
+      await supabaseAuth.auth.getUser(
         accessToken
       );
 
@@ -199,7 +197,6 @@ export default async function handler(
       authError ||
       !user
     ) {
-
       console.error(
         "R2 delete authentication failed:",
         authError?.message
@@ -211,15 +208,38 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "Authenticated user:",
+      user.id
+    );
+
     // ------------------------------------------------------
-    // VERIFY ADMIN USER
+    // ADMIN VERIFICATION
+    //
+    // Use the service-role client here so RLS on
+    // admin_users cannot hide the admin record.
     // ------------------------------------------------------
+
+    const supabaseAdmin =
+      createClient(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        {
+          auth: {
+            persistSession:
+              false,
+
+            autoRefreshToken:
+              false,
+          },
+        }
+      );
 
     const {
       data: adminRow,
       error: adminError,
     } =
-      await supabase
+      await supabaseAdmin
         .from("admin_users")
         .select("user_id")
         .eq(
@@ -229,10 +249,9 @@ export default async function handler(
         .maybeSingle();
 
     if (adminError) {
-
       console.error(
         "Admin verification error:",
-        adminError.message
+        adminError
       );
 
       return res.status(500).json({
@@ -242,7 +261,6 @@ export default async function handler(
     }
 
     if (!adminRow) {
-
       console.warn(
         "Non-admin delete attempt:",
         user.id
@@ -254,6 +272,11 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "Admin verification successful:",
+      user.id
+    );
+
     // ------------------------------------------------------
     // REQUEST BODY
     // ------------------------------------------------------
@@ -263,7 +286,6 @@ export default async function handler(
     } = req.body || {};
 
     if (!fileName) {
-
       return res.status(400).json({
         error:
           "fileName is required.",
@@ -288,7 +310,6 @@ export default async function handler(
         );
 
     if (!cleanFileName) {
-
       return res.status(400).json({
         error:
           "Invalid file name.",
@@ -300,7 +321,6 @@ export default async function handler(
         .toLowerCase()
         .endsWith(".pdf")
     ) {
-
       return res.status(400).json({
         error:
           "Only PDF files can be deleted.",
@@ -335,6 +355,11 @@ export default async function handler(
     // SUCCESS
     // ------------------------------------------------------
 
+    console.log(
+      "R2 PDF deleted successfully:",
+      cleanFileName
+    );
+
     return res.status(200).json({
       success: true,
 
@@ -346,7 +371,6 @@ export default async function handler(
     });
 
   } catch (error) {
-
     console.error(
       "R2 delete error:",
       error
