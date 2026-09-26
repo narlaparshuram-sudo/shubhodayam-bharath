@@ -1,16 +1,25 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  S3Client,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+
 import { createClient } from "@supabase/supabase-js";
 
 // ==========================================================
 // CLOUDFLARE R2 CONFIGURATION
 // ==========================================================
 
-const ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
-const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const ACCOUNT_ID =
+  process.env.R2_ACCOUNT_ID;
 
-const BUCKET_NAME = "shubhodayam-pdfs";
+const ACCESS_KEY_ID =
+  process.env.R2_ACCESS_KEY_ID;
+
+const SECRET_ACCESS_KEY =
+  process.env.R2_SECRET_ACCESS_KEY;
+
+const BUCKET_NAME =
+  "shubhodayam-pdfs";
 
 const R2_ENDPOINT =
   `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
@@ -31,10 +40,15 @@ const SUPABASE_PUBLISHABLE_KEY =
 
 const r2 = new S3Client({
   region: "auto",
+
   endpoint: R2_ENDPOINT,
+
   credentials: {
-    accessKeyId: ACCESS_KEY_ID,
-    secretAccessKey: SECRET_ACCESS_KEY,
+    accessKeyId:
+      ACCESS_KEY_ID,
+
+    secretAccessKey:
+      SECRET_ACCESS_KEY,
   },
 });
 
@@ -42,7 +56,10 @@ const r2 = new S3Client({
 // VERCEL API HANDLER
 // ==========================================================
 
-export default async function handler(req, res) {
+export default async function handler(
+  req,
+  res
+) {
 
   // --------------------------------------------------------
   // CORS
@@ -67,17 +84,24 @@ export default async function handler(req, res) {
   // OPTIONS
   // --------------------------------------------------------
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  if (
+    req.method === "OPTIONS"
+  ) {
+    return res
+      .status(200)
+      .end();
   }
 
   // --------------------------------------------------------
   // METHOD
   // --------------------------------------------------------
 
-  if (req.method !== "POST") {
+  if (
+    req.method !== "POST"
+  ) {
     return res.status(405).json({
-      error: "Method not allowed",
+      error:
+        "Method not allowed",
     });
   }
 
@@ -94,6 +118,7 @@ export default async function handler(req, res) {
       !SUPABASE_URL ||
       !SUPABASE_PUBLISHABLE_KEY
     ) {
+
       console.error(
         "Required server environment variables are missing."
       );
@@ -109,9 +134,15 @@ export default async function handler(req, res) {
     // ------------------------------------------------------
 
     const authHeader =
-      req.headers.authorization || "";
+      req.headers.authorization ||
+      "";
 
-    if (!authHeader.startsWith("Bearer ")) {
+    if (
+      !authHeader.startsWith(
+        "Bearer "
+      )
+    ) {
+
       return res.status(401).json({
         error:
           "Authentication required.",
@@ -119,9 +150,12 @@ export default async function handler(req, res) {
     }
 
     const accessToken =
-      authHeader.slice(7).trim();
+      authHeader
+        .slice(7)
+        .trim();
 
     if (!accessToken) {
+
       return res.status(401).json({
         error:
           "Authentication required.",
@@ -132,16 +166,20 @@ export default async function handler(req, res) {
     // SUPABASE AUTH CLIENT
     // ------------------------------------------------------
 
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLISHABLE_KEY,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
+    const supabase =
+      createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession:
+              false,
+
+            autoRefreshToken:
+              false,
+          },
+        }
+      );
 
     // ------------------------------------------------------
     // VERIFY SUPABASE USER
@@ -157,10 +195,13 @@ export default async function handler(req, res) {
         accessToken
       );
 
-    if (authError || !user) {
+    if (
+      authError ||
+      !user
+    ) {
 
       console.error(
-        "R2 upload authentication failed:",
+        "R2 delete authentication failed:",
         authError?.message
       );
 
@@ -181,7 +222,10 @@ export default async function handler(req, res) {
       await supabase
         .from("admin_users")
         .select("user_id")
-        .eq("user_id", user.id)
+        .eq(
+          "user_id",
+          user.id
+        )
         .maybeSingle();
 
     if (adminError) {
@@ -200,7 +244,7 @@ export default async function handler(req, res) {
     if (!adminRow) {
 
       console.warn(
-        "Non-admin upload attempt:",
+        "Non-admin delete attempt:",
         user.id
       );
 
@@ -216,29 +260,13 @@ export default async function handler(req, res) {
 
     const {
       fileName,
-      contentType,
     } = req.body || {};
 
     if (!fileName) {
+
       return res.status(400).json({
         error:
           "fileName is required.",
-      });
-    }
-
-    // ------------------------------------------------------
-    // PDF ONLY
-    // ------------------------------------------------------
-
-    const safeContentType =
-      contentType === "application/pdf"
-        ? "application/pdf"
-        : null;
-
-    if (!safeContentType) {
-      return res.status(400).json({
-        error:
-          "Only PDF files are allowed.",
       });
     }
 
@@ -248,7 +276,10 @@ export default async function handler(req, res) {
 
     const cleanFileName =
       String(fileName)
-        .replace(/\\/g, "/")
+        .replace(
+          /\\/g,
+          "/"
+        )
         .split("/")
         .pop()
         .replace(
@@ -257,6 +288,7 @@ export default async function handler(req, res) {
         );
 
     if (!cleanFileName) {
+
       return res.status(400).json({
         error:
           "Invalid file name.",
@@ -268,76 +300,62 @@ export default async function handler(req, res) {
         .toLowerCase()
         .endsWith(".pdf")
     ) {
+
       return res.status(400).json({
         error:
-          "Only PDF files are allowed.",
+          "Only PDF files can be deleted.",
       });
     }
 
     // ------------------------------------------------------
-    // R2 OBJECT KEY
+    // DELETE FROM R2
     // ------------------------------------------------------
 
-    const key = cleanFileName;
-
     console.log(
-      "Generating R2 upload URL for admin:",
-      user.id,
-      key
+      "Deleting R2 PDF:",
+      cleanFileName,
+      "by admin:",
+      user.id
+    );
+
+    const command =
+      new DeleteObjectCommand({
+        Bucket:
+          BUCKET_NAME,
+
+        Key:
+          cleanFileName,
+      });
+
+    await r2.send(
+      command
     );
 
     // ------------------------------------------------------
-    // PRESIGNED PUT URL
-    // ------------------------------------------------------
-
-    const command =
-      new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-        ContentType:
-          "application/pdf",
-      });
-
-    const uploadUrl =
-      await getSignedUrl(
-        r2,
-        command,
-        {
-          expiresIn: 900,
-        }
-      );
-
-    // ------------------------------------------------------
-    // PUBLIC R2 URL
-    // ------------------------------------------------------
-
-    const publicUrl =
-      `https://pub-f9f048e0bee74489bafcef7bcbf0bec1.r2.dev/${encodeURIComponent(
-        key
-      )}`;
-
-    // ------------------------------------------------------
-    // RESPONSE
+    // SUCCESS
     // ------------------------------------------------------
 
     return res.status(200).json({
       success: true,
-      uploadUrl,
-      key,
-      publicUrl,
+
+      message:
+        "R2 PDF deleted successfully.",
+
+      key:
+        cleanFileName,
     });
 
   } catch (error) {
 
     console.error(
-      "R2 upload URL error:",
+      "R2 delete error:",
       error
     );
 
     return res.status(500).json({
       error:
         error?.message ||
-        "Unable to generate R2 upload URL.",
+        "Unable to delete R2 PDF.",
     });
   }
 }

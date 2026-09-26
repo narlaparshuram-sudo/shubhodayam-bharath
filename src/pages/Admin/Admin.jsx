@@ -730,6 +730,8 @@ export default function Admin() {
               headers: {
                 "Content-Type":
                   "application/json",
+                Authorization:
+                  `Bearer ${session.access_token}`,
               },
               body: JSON.stringify(
                 {
@@ -941,6 +943,8 @@ export default function Admin() {
             headers: {
               "Content-Type":
                 "application/json",
+                Authorization:
+                  `Bearer ${session.access_token}`,
             },
             body: JSON.stringify(
               {
