@@ -418,8 +418,6 @@ function Admin() {
             pdf_path:
               publicUrl,
 
-            thumbnail_path:
-              thumbnailPath,
           })
           .eq(
             "date",
@@ -483,8 +481,6 @@ function Admin() {
             pdf_path:
               publicUrl,
 
-            thumbnail_path:
-              thumbnailPath,
           })
           .select()
           .single();
