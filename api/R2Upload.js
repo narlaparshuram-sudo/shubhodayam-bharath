@@ -6,11 +6,17 @@ import { createClient } from "@supabase/supabase-js";
 // CLOUDFLARE R2 CONFIGURATION
 // ==========================================================
 
-const ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
-const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const ACCOUNT_ID =
+  process.env.R2_ACCOUNT_ID;
 
-const BUCKET_NAME = "shubhodayam-pdfs";
+const ACCESS_KEY_ID =
+  process.env.R2_ACCESS_KEY_ID;
+
+const SECRET_ACCESS_KEY =
+  process.env.R2_SECRET_ACCESS_KEY;
+
+const BUCKET_NAME =
+  "shubhodayam-pdfs";
 
 const R2_ENDPOINT =
   `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
@@ -25,16 +31,28 @@ const SUPABASE_URL =
 const SUPABASE_PUBLISHABLE_KEY =
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+// IMPORTANT:
+// This key is used ONLY on the Vercel server.
+// Never put this key in React/frontend code.
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 // ==========================================================
 // R2 CLIENT
 // ==========================================================
 
 const r2 = new S3Client({
   region: "auto",
-  endpoint: R2_ENDPOINT,
+
+  endpoint:
+    R2_ENDPOINT,
+
   credentials: {
-    accessKeyId: ACCESS_KEY_ID,
-    secretAccessKey: SECRET_ACCESS_KEY,
+    accessKeyId:
+      ACCESS_KEY_ID,
+
+    secretAccessKey:
+      SECRET_ACCESS_KEY,
   },
 });
 
@@ -42,12 +60,10 @@ const r2 = new S3Client({
 // VERCEL API HANDLER
 // ==========================================================
 
-export default async function handler(req, res) {
-
-  // --------------------------------------------------------
-  // CORS
-  // --------------------------------------------------------
-
+export default async function handler(
+  req,
+  res
+) {
   res.setHeader(
     "Access-Control-Allow-Origin",
     "https://shubhodayam-bharath.vercel.app"
@@ -63,36 +79,35 @@ export default async function handler(req, res) {
     "Content-Type, Authorization"
   );
 
-  // --------------------------------------------------------
-  // OPTIONS
-  // --------------------------------------------------------
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  if (
+    req.method === "OPTIONS"
+  ) {
+    return res
+      .status(200)
+      .end();
   }
 
-  // --------------------------------------------------------
-  // METHOD
-  // --------------------------------------------------------
-
-  if (req.method !== "POST") {
+  if (
+    req.method !== "POST"
+  ) {
     return res.status(405).json({
-      error: "Method not allowed",
+      error:
+        "Method not allowed",
     });
   }
 
   try {
-
-    // ------------------------------------------------------
-    // CHECK ENVIRONMENT VARIABLES
-    // ------------------------------------------------------
+    // ========================================================
+    // CHECK SERVER ENVIRONMENT VARIABLES
+    // ========================================================
 
     if (
       !ACCOUNT_ID ||
       !ACCESS_KEY_ID ||
       !SECRET_ACCESS_KEY ||
       !SUPABASE_URL ||
-      !SUPABASE_PUBLISHABLE_KEY
+      !SUPABASE_PUBLISHABLE_KEY ||
+      !SUPABASE_SERVICE_ROLE_KEY
     ) {
       console.error(
         "Required server environment variables are missing."
@@ -104,14 +119,19 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
-    // AUTHORIZATION HEADER
-    // ------------------------------------------------------
+    // ========================================================
+    // READ LOGIN TOKEN
+    // ========================================================
 
     const authHeader =
-      req.headers.authorization || "";
+      req.headers.authorization ||
+      "";
 
-    if (!authHeader.startsWith("Bearer ")) {
+    if (
+      !authHeader.startsWith(
+        "Bearer "
+      )
+    ) {
       return res.status(401).json({
         error:
           "Authentication required.",
@@ -119,7 +139,9 @@ export default async function handler(req, res) {
     }
 
     const accessToken =
-      authHeader.slice(7).trim();
+      authHeader
+        .slice(7)
+        .trim();
 
     if (!accessToken) {
       return res.status(401).json({
@@ -128,24 +150,24 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
-    // SUPABASE AUTH CLIENT
-    // ------------------------------------------------------
+    // ========================================================
+    // VERIFY THE USER'S LOGIN SESSION
+    // ========================================================
 
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLISHABLE_KEY,
-      {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      }
-    );
+    const supabaseAuth =
+      createClient(
+        SUPABASE_URL,
+        SUPABASE_PUBLISHABLE_KEY,
+        {
+          auth: {
+            persistSession:
+              false,
 
-    // ------------------------------------------------------
-    // VERIFY SUPABASE USER
-    // ------------------------------------------------------
+            autoRefreshToken:
+              false,
+          },
+        }
+      );
 
     const {
       data: {
@@ -153,12 +175,14 @@ export default async function handler(req, res) {
       },
       error: authError,
     } =
-      await supabase.auth.getUser(
+      await supabaseAuth.auth.getUser(
         accessToken
       );
 
-    if (authError || !user) {
-
+    if (
+      authError ||
+      !user
+    ) {
       console.error(
         "R2 upload authentication failed:",
         authError?.message
@@ -170,25 +194,53 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
-    // VERIFY ADMIN USER
-    // ------------------------------------------------------
+    console.log(
+      "Authenticated user:",
+      user.id
+    );
+
+    // ========================================================
+    // VERIFY ADMIN USING SERVICE ROLE
+    // ========================================================
+    //
+    // This is the important fix.
+    //
+    // The service-role key is used ONLY on the Vercel server
+    // so RLS cannot prevent the admin_users lookup.
+    //
+
+    const supabaseAdmin =
+      createClient(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        {
+          auth: {
+            persistSession:
+              false,
+
+            autoRefreshToken:
+              false,
+          },
+        }
+      );
 
     const {
       data: adminRow,
       error: adminError,
     } =
-      await supabase
+      await supabaseAdmin
         .from("admin_users")
         .select("user_id")
-        .eq("user_id", user.id)
+        .eq(
+          "user_id",
+          user.id
+        )
         .maybeSingle();
 
     if (adminError) {
-
       console.error(
         "Admin verification error:",
-        adminError.message
+        adminError
       );
 
       return res.status(500).json({
@@ -198,7 +250,6 @@ export default async function handler(req, res) {
     }
 
     if (!adminRow) {
-
       console.warn(
         "Non-admin upload attempt:",
         user.id
@@ -210,9 +261,14 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
-    // REQUEST BODY
-    // ------------------------------------------------------
+    console.log(
+      "Admin verification successful:",
+      user.id
+    );
+
+    // ========================================================
+    // READ FILE INFORMATION
+    // ========================================================
 
     const {
       fileName,
@@ -226,29 +282,30 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
-    // PDF ONLY
-    // ------------------------------------------------------
+    // ========================================================
+    // ONLY PDF FILES
+    // ========================================================
 
-    const safeContentType =
-      contentType === "application/pdf"
-        ? "application/pdf"
-        : null;
-
-    if (!safeContentType) {
+    if (
+      contentType !==
+      "application/pdf"
+    ) {
       return res.status(400).json({
         error:
           "Only PDF files are allowed.",
       });
     }
 
-    // ------------------------------------------------------
+    // ========================================================
     // SANITIZE FILE NAME
-    // ------------------------------------------------------
+    // ========================================================
 
     const cleanFileName =
       String(fileName)
-        .replace(/\\/g, "/")
+        .replace(
+          /\\/g,
+          "/"
+        )
         .split("/")
         .pop()
         .replace(
@@ -274,29 +331,39 @@ export default async function handler(req, res) {
       });
     }
 
-    // ------------------------------------------------------
+    // ========================================================
     // R2 OBJECT KEY
-    // ------------------------------------------------------
+    // ========================================================
 
-    const key = cleanFileName;
+    const key =
+      cleanFileName;
 
     console.log(
-      "Generating R2 upload URL for admin:",
-      user.id,
-      key
+      "Generating R2 upload URL:",
+      key,
+      "for admin:",
+      user.id
     );
 
-    // ------------------------------------------------------
-    // PRESIGNED PUT URL
-    // ------------------------------------------------------
+    // ========================================================
+    // CREATE R2 UPLOAD COMMAND
+    // ========================================================
 
     const command =
       new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
+        Bucket:
+          BUCKET_NAME,
+
+        Key:
+          key,
+
         ContentType:
           "application/pdf",
       });
+
+    // ========================================================
+    // CREATE SIGNED UPLOAD URL
+    // ========================================================
 
     const uploadUrl =
       await getSignedUrl(
@@ -307,28 +374,30 @@ export default async function handler(req, res) {
         }
       );
 
-    // ------------------------------------------------------
+    // ========================================================
     // PUBLIC R2 URL
-    // ------------------------------------------------------
+    // ========================================================
 
     const publicUrl =
       `https://pub-f9f048e0bee74489bafcef7bcbf0bec1.r2.dev/${encodeURIComponent(
         key
       )}`;
 
-    // ------------------------------------------------------
-    // RESPONSE
-    // ------------------------------------------------------
+    // ========================================================
+    // RETURN RESULT
+    // ========================================================
 
     return res.status(200).json({
       success: true,
+
       uploadUrl,
+
       key,
+
       publicUrl,
     });
 
   } catch (error) {
-
     console.error(
       "R2 upload URL error:",
       error
