@@ -5,6 +5,10 @@
       "destination": "/api/share?date=:date"
     },
     {
+      "source": "/home-share",
+      "destination": "/api/home-share"
+    },
+    {
       "source": "/newspaper/:date",
       "destination": "/index.html"
     },
