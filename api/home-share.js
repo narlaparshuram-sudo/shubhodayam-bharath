@@ -1,20 +1,38 @@
 // =========================================================
 // SHUBHODAYAM BHARATH
-// HOMEPAGE SOCIAL PREVIEW - DIAGNOSTIC
+// HOMEPAGE SOCIAL SHARE PREVIEW
 // =========================================================
 
 export default async function handler(req, res) {
   try {
-    const supabaseUrl =
-      process.env.SUPABASE_URL ||
-      process.env.VITE_SUPABASE_URL
+    // -------------------------------------------------------
+    // Find a valid Supabase URL
+    //
+    // VITE_SUPABASE_URL is already used by the working
+    // frontend, so prefer it when it contains a valid URL.
+    // -------------------------------------------------------
 
-    if (!supabaseUrl) {
+    const possibleUrls = [
+      process.env.VITE_SUPABASE_URL,
+      process.env.SUPABASE_URL,
+    ]
+
+    const supabaseUrlValue =
+      possibleUrls.find(isValidUrl)
+
+    if (!supabaseUrlValue) {
       res.status(500).send(
-        "ERROR: SUPABASE_URL is missing."
+        "Supabase URL is missing or invalid."
       )
       return
     }
+
+    const supabaseUrl =
+      supabaseUrlValue.replace(/\/+$/, "")
+
+    // -------------------------------------------------------
+    // Supabase server key
+    // -------------------------------------------------------
 
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -22,16 +40,17 @@ export default async function handler(req, res) {
 
     if (!supabaseKey) {
       res.status(500).send(
-        "ERROR: Supabase server key is missing."
+        "Supabase server key is missing."
       )
       return
     }
 
-    const cleanSupabaseUrl =
-      supabaseUrl.replace(/\/+$/, "")
+    // -------------------------------------------------------
+    // Find latest newspaper edition
+    // -------------------------------------------------------
 
     const apiUrl =
-      `${cleanSupabaseUrl}/rest/v1/editions` +
+      `${supabaseUrl}/rest/v1/editions` +
       `?select=date,title` +
       `&order=date.desc` +
       `&limit=1`
@@ -45,71 +64,245 @@ export default async function handler(req, res) {
       },
     })
 
-    const responseText =
-      await response.text()
-
     if (!response.ok) {
-      res.status(500).send(
-        `SUPABASE ERROR ${response.status}: ${responseText}`
+      const errorText =
+        await response.text()
+
+      console.error(
+        "SUPABASE LATEST EDITION ERROR:",
+        response.status,
+        errorText
       )
+
+      res.status(500).send(
+        "Unable to find the latest newspaper edition."
+      )
+
       return
     }
 
-    let editions
-
-    try {
-      editions = JSON.parse(responseText)
-    } catch {
-      res.status(500).send(
-        `SUPABASE RETURNED INVALID JSON: ${responseText}`
-      )
-      return
-    }
+    const editions =
+      await response.json()
 
     if (
       !Array.isArray(editions) ||
-      editions.length === 0
+      editions.length === 0 ||
+      !editions[0]?.date
     ) {
       res.status(404).send(
-        "SUPABASE CONNECTED SUCCESSFULLY, BUT NO EDITIONS WERE FOUND."
+        "No newspaper editions found."
       )
+
       return
     }
 
     const latestDate =
-      String(editions[0]?.date || "").trim()
+      String(editions[0].date).trim()
 
-    if (!latestDate) {
-      res.status(500).send(
-        "EDITION WAS FOUND, BUT DATE IS EMPTY."
-      )
-      return
-    }
+    // -------------------------------------------------------
+    // Thumbnail
+    //
+    // Your PDFs are stored in R2.
+    // Your thumbnails are stored in Supabase Storage.
+    // -------------------------------------------------------
 
     const thumbnailUrl =
-      `${cleanSupabaseUrl}` +
+      `${supabaseUrl}` +
       `/storage/v1/object/public/newspapers/thumbnails/${latestDate}.jpg`
 
-    res.status(200).send(
-      `SUCCESS
+    // -------------------------------------------------------
+    // Website
+    // -------------------------------------------------------
 
-Latest edition:
-${latestDate}
+    const websiteUrl =
+      "https://shubhodayam-bharath.vercel.app/"
 
-Thumbnail URL:
-${thumbnailUrl}
+    const title =
+      "Shubhodayam Bharath – Daily Telugu & English Newspaper"
 
-Supabase connection:
-OK`
+    const description =
+      `Read the latest Shubhodayam Bharath newspaper online. Latest edition: ${latestDate}.`
+
+    // -------------------------------------------------------
+    // Social preview HTML
+    // -------------------------------------------------------
+
+    const html = `<!doctype html>
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <title>${escapeHtml(title)}</title>
+
+  <meta
+    name="description"
+    content="${escapeHtml(description)}"
+  />
+
+  <!-- OPEN GRAPH -->
+
+  <meta
+    property="og:type"
+    content="website"
+  />
+
+  <meta
+    property="og:site_name"
+    content="Shubhodayam Bharath"
+  />
+
+  <meta
+    property="og:title"
+    content="${escapeHtml(title)}"
+  />
+
+  <meta
+    property="og:description"
+    content="${escapeHtml(description)}"
+  />
+
+  <meta
+    property="og:url"
+    content="${escapeHtml(websiteUrl)}"
+  />
+
+  <meta
+    property="og:image"
+    content="${escapeHtml(thumbnailUrl)}"
+  />
+
+  <meta
+    property="og:image:secure_url"
+    content="${escapeHtml(thumbnailUrl)}"
+  />
+
+  <meta
+    property="og:image:type"
+    content="image/jpeg"
+  />
+
+  <meta
+    property="og:image:alt"
+    content="Latest Shubhodayam Bharath newspaper edition"
+  />
+
+  <!-- TWITTER / X -->
+
+  <meta
+    name="twitter:card"
+    content="summary_large_image"
+  />
+
+  <meta
+    name="twitter:title"
+    content="${escapeHtml(title)}"
+  />
+
+  <meta
+    name="twitter:description"
+    content="${escapeHtml(description)}"
+  />
+
+  <meta
+    name="twitter:image"
+    content="${escapeHtml(thumbnailUrl)}"
+  />
+
+  <!-- CANONICAL -->
+
+  <link
+    rel="canonical"
+    href="${escapeHtml(websiteUrl)}"
+  />
+
+  <!-- REDIRECT -->
+
+  <meta
+    http-equiv="refresh"
+    content="0;url=${escapeHtml(websiteUrl)}"
+  />
+
+  <script>
+    window.location.replace(
+      ${JSON.stringify(websiteUrl)}
     )
+  </script>
+
+</head>
+
+<body>
+
+  <p>
+    Opening Shubhodayam Bharath...
+  </p>
+
+  <p>
+    <a href="${escapeHtml(websiteUrl)}">
+      Open Shubhodayam Bharath
+    </a>
+  </p>
+
+</body>
+
+</html>`
+
+    res.status(200)
+
+    res.setHeader(
+      "Content-Type",
+      "text/html; charset=utf-8"
+    )
+
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=300, s-maxage=3600"
+    )
+
+    res.send(html)
+
   } catch (error) {
+
     console.error(
-      "HOME SHARE DIAGNOSTIC ERROR:",
+      "HOME SHARE ERROR:",
       error
     )
 
     res.status(500).send(
-      `SERVER ERROR: ${error?.message || String(error)}`
+      "Unable to create the homepage share preview."
     )
   }
+}
+
+// =========================================================
+// CHECK WHETHER VALUE IS A VALID URL
+// =========================================================
+
+function isValidUrl(value) {
+  if (!value) return false
+
+  try {
+    const url = new URL(value)
+
+    return (
+      url.protocol === "https:" ||
+      url.protocol === "http:"
+    )
+  } catch {
+    return false
+  }
+}
+
+// =========================================================
+// HTML ESCAPE
+// =========================================================
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
 }
