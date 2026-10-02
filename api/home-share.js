@@ -24,22 +24,26 @@ export default async function handler(req, res) {
       supabaseUrl.replace(/\/+$/, "")
 
     // -------------------------------------------------------
-    // Supabase publishable key
+    // Server-side Supabase key
+    //
+    // Use the existing Service Role Key on Vercel.
+    // This key is NEVER sent to the browser.
     // -------------------------------------------------------
 
     const supabaseKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_PUBLISHABLE_KEY ||
       process.env.VITE_SUPABASE_PUBLISHABLE_KEY
 
     if (!supabaseKey) {
       res.status(500).send(
-        "Supabase publishable key environment variable is missing."
+        "Supabase server key is missing."
       )
       return
     }
 
     // -------------------------------------------------------
-    // Find latest newspaper edition
+    // Get latest newspaper edition
     // -------------------------------------------------------
 
     const apiUrl =
@@ -53,6 +57,7 @@ export default async function handler(req, res) {
       headers: {
         apikey: supabaseKey,
         Authorization: `Bearer ${supabaseKey}`,
+        Accept: "application/json",
       },
     })
 
@@ -61,6 +66,7 @@ export default async function handler(req, res) {
 
       console.error(
         "SUPABASE LATEST EDITION ERROR:",
+        response.status,
         errorText
       )
 
@@ -86,10 +92,13 @@ export default async function handler(req, res) {
     }
 
     const latestDate =
-      editions[0].date
+      String(editions[0].date).trim()
 
     // -------------------------------------------------------
-    // Latest newspaper thumbnail
+    // Existing thumbnail location
+    //
+    // PDFs are in R2.
+    // Thumbnails are in Supabase Storage.
     // -------------------------------------------------------
 
     const thumbnailUrl =
@@ -97,7 +106,7 @@ export default async function handler(req, res) {
       `/storage/v1/object/public/newspapers/thumbnails/${latestDate}.jpg`
 
     // -------------------------------------------------------
-    // Homepage URL
+    // Real website URL
     // -------------------------------------------------------
 
     const websiteUrl =
@@ -110,7 +119,7 @@ export default async function handler(req, res) {
       `Read the latest Shubhodayam Bharath newspaper online. Latest edition: ${latestDate}.`
 
     // -------------------------------------------------------
-    // HTML
+    // Social preview HTML
     // -------------------------------------------------------
 
     const html = `<!doctype html>
@@ -127,9 +136,7 @@ export default async function handler(req, res) {
     content="${escapeHtml(description)}"
   />
 
-  <!-- =====================================================
-       OPEN GRAPH
-       ===================================================== -->
+  <!-- OPEN GRAPH -->
 
   <meta
     property="og:type"
@@ -176,9 +183,7 @@ export default async function handler(req, res) {
     content="Latest Shubhodayam Bharath newspaper edition"
   />
 
-  <!-- =====================================================
-       TWITTER / X
-       ===================================================== -->
+  <!-- TWITTER / X -->
 
   <meta
     name="twitter:card"
@@ -200,18 +205,14 @@ export default async function handler(req, res) {
     content="${escapeHtml(thumbnailUrl)}"
   />
 
-  <!-- =====================================================
-       CANONICAL
-       ===================================================== -->
+  <!-- CANONICAL -->
 
   <link
     rel="canonical"
     href="${escapeHtml(websiteUrl)}"
   />
 
-  <!-- =====================================================
-       REDIRECT TO REAL WEBSITE
-       ===================================================== -->
+  <!-- REDIRECT TO REAL WEBSITE -->
 
   <meta
     http-equiv="refresh"
