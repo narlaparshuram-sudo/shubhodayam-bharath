@@ -1,10 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
+  "redirects": [
     {
       "source": "/share/:date",
-      "destination": "/api/share/:date"
-    },
+      "destination": "/api/share/:date",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     {
       "source": "/home-share",
       "destination": "/api/home-share"
