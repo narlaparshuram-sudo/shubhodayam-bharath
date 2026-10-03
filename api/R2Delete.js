@@ -1,120 +1,53 @@
-import {
-  S3Client,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
-
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 
 // ==========================================================
 // CLOUDFLARE R2 CONFIGURATION
 // ==========================================================
 
-const ACCOUNT_ID =
-  process.env.R2_ACCOUNT_ID;
-
-const ACCESS_KEY_ID =
-  process.env.R2_ACCESS_KEY_ID;
-
-const SECRET_ACCESS_KEY =
-  process.env.R2_SECRET_ACCESS_KEY;
-
-const BUCKET_NAME =
-  "shubhodayam-pdfs";
-
-const R2_ENDPOINT =
-  `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+const BUCKET_NAME = "shubhodayam-pdfs";
+const R2_ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 // ==========================================================
 // SUPABASE CONFIGURATION
 // ==========================================================
 
-const SUPABASE_URL =
-  process.env.VITE_SUPABASE_URL;
-
-const SUPABASE_PUBLISHABLE_KEY =
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-// IMPORTANT:
-// This key is used ONLY on the Vercel server.
-// Never put this key in frontend React code.
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// ==========================================================
-// R2 CLIENT
-// ==========================================================
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const r2 = new S3Client({
   region: "auto",
-
   endpoint: R2_ENDPOINT,
-
   credentials: {
-    accessKeyId:
-      ACCESS_KEY_ID,
-
-    secretAccessKey:
-      SECRET_ACCESS_KEY,
+    accessKeyId: ACCESS_KEY_ID,
+    secretAccessKey: SECRET_ACCESS_KEY,
   },
 });
 
-// ==========================================================
-// VERCEL API HANDLER
-// ==========================================================
-
-export default async function handler(
-  req,
-  res
-) {
-  // --------------------------------------------------------
-  // CORS
-  // --------------------------------------------------------
-
+export default async function handler(req, res) {
   res.setHeader(
     "Access-Control-Allow-Origin",
     "https://shubhodayam-bharath.vercel.app"
   );
-
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "POST, OPTIONS"
-  );
-
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization"
   );
 
-  // --------------------------------------------------------
-  // OPTIONS
-  // --------------------------------------------------------
-
-  if (
-    req.method === "OPTIONS"
-  ) {
-    return res
-      .status(200)
-      .end();
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  // --------------------------------------------------------
-  // METHOD
-  // --------------------------------------------------------
-
-  if (
-    req.method !== "POST"
-  ) {
-    return res.status(405).json({
-      error:
-        "Method not allowed",
-    });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    // ------------------------------------------------------
-    // CHECK SERVER ENVIRONMENT VARIABLES
-    // ------------------------------------------------------
-
     if (
       !ACCOUNT_ID ||
       !ACCESS_KEY_ID ||
@@ -123,263 +56,146 @@ export default async function handler(
       !SUPABASE_PUBLISHABLE_KEY ||
       !SUPABASE_SERVICE_ROLE_KEY
     ) {
-      console.error(
-        "Required server environment variables are missing."
-      );
-
       return res.status(500).json({
-        error:
-          "Server configuration is missing.",
+        error: "Server configuration is missing.",
       });
     }
 
-    // ------------------------------------------------------
-    // AUTHORIZATION HEADER
-    // ------------------------------------------------------
+    const authHeader = req.headers.authorization || "";
 
-    const authHeader =
-      req.headers.authorization ||
-      "";
-
-    if (
-      !authHeader.startsWith(
-        "Bearer "
-      )
-    ) {
+    if (!authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       });
     }
 
-    const accessToken =
-      authHeader
-        .slice(7)
-        .trim();
+    const accessToken = authHeader.slice(7).trim();
 
     if (!accessToken) {
       return res.status(401).json({
-        error:
-          "Authentication required.",
+        error: "Authentication required.",
       });
     }
 
-    // ------------------------------------------------------
-    // VERIFY LOGIN SESSION
-    // ------------------------------------------------------
-
-    const supabaseAuth =
-      createClient(
-        SUPABASE_URL,
-        SUPABASE_PUBLISHABLE_KEY,
-        {
-          auth: {
-            persistSession:
-              false,
-
-            autoRefreshToken:
-              false,
-          },
-        }
-      );
-
-    const {
-      data: {
-        user,
-      },
-      error: authError,
-    } =
-      await supabaseAuth.auth.getUser(
-        accessToken
-      );
-
-    if (
-      authError ||
-      !user
-    ) {
-      console.error(
-        "R2 delete authentication failed:",
-        authError?.message
-      );
-
-      return res.status(401).json({
-        error:
-          "Invalid or expired login session.",
-      });
-    }
-
-    console.log(
-      "Authenticated user:",
-      user.id
+    const supabaseAuth = createClient(
+      SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
     );
 
-    // ------------------------------------------------------
-    // ADMIN VERIFICATION
-    //
-    // Use the service-role client here so RLS on
-    // admin_users cannot hide the admin record.
-    // ------------------------------------------------------
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAuth.auth.getUser(accessToken);
 
-    const supabaseAdmin =
-      createClient(
-        SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY,
-        {
-          auth: {
-            persistSession:
-              false,
+    if (authError || !user) {
+      return res.status(401).json({
+        error: "Invalid or expired login session.",
+      });
+    }
 
-            autoRefreshToken:
-              false,
-          },
-        }
-      );
+    const supabaseAdmin = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      }
+    );
 
     const {
       data: adminRow,
       error: adminError,
-    } =
-      await supabaseAdmin
-        .from("admin_users")
-        .select("user_id")
-        .eq(
-          "user_id",
-          user.id
-        )
-        .maybeSingle();
+    } = await supabaseAdmin
+      .from("admin_users")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     if (adminError) {
-      console.error(
-        "Admin verification error:",
-        adminError
-      );
-
+      console.error("Admin verification error:", adminError);
       return res.status(500).json({
-        error:
-          "Unable to verify admin access.",
+        error: "Unable to verify admin access.",
       });
     }
 
     if (!adminRow) {
-      console.warn(
-        "Non-admin delete attempt:",
-        user.id
-      );
-
       return res.status(403).json({
-        error:
-          "Admin access required.",
+        error: "Admin access required.",
       });
     }
 
-    console.log(
-      "Admin verification successful:",
-      user.id
-    );
-
-    // ------------------------------------------------------
-    // REQUEST BODY
-    // ------------------------------------------------------
-
-    const {
-      fileName,
-    } = req.body || {};
+    const { fileName } = req.body || {};
 
     if (!fileName) {
       return res.status(400).json({
-        error:
-          "fileName is required.",
+        error: "fileName is required.",
       });
     }
 
-    // ------------------------------------------------------
-    // SANITIZE FILE NAME
-    // ------------------------------------------------------
-
-    const cleanFileName =
-      String(fileName)
-        .replace(
-          /\\/g,
-          "/"
-        )
-        .split("/")
-        .pop()
-        .replace(
-          /[^a-zA-Z0-9._-]/g,
-          "-"
-        );
-
-    if (!cleanFileName) {
-      return res.status(400).json({
-        error:
-          "Invalid file name.",
-      });
-    }
+    let key = String(fileName).trim().replace(/\\/g, "/");
+    key = key.replace(/^\/+/, "");
 
     if (
-      !cleanFileName
-        .toLowerCase()
-        .endsWith(".pdf")
+      !key ||
+      key.includes("../") ||
+      key.includes("/..") ||
+      key.includes("\\..")
     ) {
       return res.status(400).json({
-        error:
-          "Only PDF files can be deleted.",
+        error: "Invalid file path.",
       });
     }
 
-    // ------------------------------------------------------
-    // DELETE FROM R2
-    // ------------------------------------------------------
+    const parts = key.split("/").filter(Boolean);
 
-    console.log(
-      "Deleting R2 PDF:",
-      cleanFileName,
-      "by admin:",
-      user.id
-    );
-
-    const command =
-      new DeleteObjectCommand({
-        Bucket:
-          BUCKET_NAME,
-
-        Key:
-          cleanFileName,
+    if (!parts.length) {
+      return res.status(400).json({
+        error: "Invalid file path.",
       });
+    }
+
+    key = parts
+      .map((part) => part.replace(/[^a-zA-Z0-9._-]/g, "-"))
+      .join("/");
+
+    const allowedPdf = /^\d{4}-\d{2}-\d{2}\.pdf$/i;
+    const allowedThumbnail =
+      /^thumbnails\/\d{4}-\d{2}-\d{2}\.(jpg|jpeg)$/i;
+
+    if (!allowedPdf.test(key) && !allowedThumbnail.test(key)) {
+      return res.status(400).json({
+        error: "Invalid R2 file path.",
+      });
+    }
+
+    console.log("Deleting R2 object:", key, "for admin:", user.id);
 
     await r2.send(
-      command
-    );
-
-    // ------------------------------------------------------
-    // SUCCESS
-    // ------------------------------------------------------
-
-    console.log(
-      "R2 PDF deleted successfully:",
-      cleanFileName
+      new DeleteObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: key,
+      })
     );
 
     return res.status(200).json({
       success: true,
-
-      message:
-        "R2 PDF deleted successfully.",
-
-      key:
-        cleanFileName,
+      key,
     });
-
   } catch (error) {
-    console.error(
-      "R2 delete error:",
-      error
-    );
+    console.error("R2 delete error:", error);
 
     return res.status(500).json({
       error:
         error?.message ||
-        "Unable to delete R2 PDF.",
+        "Unable to delete R2 object.",
     });
   }
 }

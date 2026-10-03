@@ -1,1167 +1,1807 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  getDocument,
+  GlobalWorkerOptions,
+} from "pdfjs-dist";
 import { supabase } from "../../lib/supabase";
-import * as pdfjsLib from "pdfjs-dist";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.54/pdf.worker.min.mjs";
+// ==========================================================
+// PDF.JS WORKER
+// ==========================================================
 
-const R2_PUBLIC_BASE_URL =
-  "https://pub-f9f048e0bee74489bafcef7bcbf0bec1.r2.dev";
+GlobalWorkerOptions.workerSrc =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/pdf.worker.min.mjs";
 
-function Admin() {
+const PDF_WASM_URL =
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/wasm/";
+
+// ==========================================================
+// ADMIN PAGE
+// ==========================================================
+
+export default function Admin() {
+  // ========================================================
+  // AUTH
+  // ========================================================
+
   const [session, setSession] = useState(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // ========================================================
+  // FORM
+  // ========================================================
 
   const [date, setDate] = useState("");
-  const [pdfFile, setPdfFile] = useState(null);
+  const [file, setFile] = useState(null);
+
+  // IMPORTANT:
+  // Using a ref makes file input handling more reliable on
+  // Android and iOS browsers.
+  const fileInputRef = useRef(null);
+
+  // ========================================================
+  // EDITION
+  // ========================================================
+
+  const [existingEdition, setExistingEdition] =
+    useState(null);
+
+  const [checkingEdition, setCheckingEdition] =
+    useState(false);
+
+  // ========================================================
+  // STATUS
+  // ========================================================
 
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [messageType, setMessageType] = useState("");
 
-  const [existingEdition, setExistingEdition] = useState(null);
-  const [checkingEdition, setCheckingEdition] = useState(false);
+  // ========================================================
+  // AUTH CHECK
+  // ========================================================
 
   useEffect(() => {
-    checkSession();
+    let mounted = true;
 
+    async function loadSession() {
+      try {
+        setCheckingAdmin(true);
+
+        const {
+          data: { session: currentSession },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error(
+            "Session error:",
+            error
+          );
+
+          if (mounted) {
+            setSession(null);
+            setIsAdmin(false);
+            setCheckingAdmin(false);
+          }
+
+          return;
+        }
+
+        if (!mounted) return;
+
+        setSession(currentSession);
+
+        if (currentSession?.user) {
+          await verifyAdmin(
+            currentSession.user.id
+          );
+        } else {
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
+      } catch (error) {
+        console.error(
+          "Auth check error:",
+          error
+        );
+
+        if (mounted) {
+          setSession(null);
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
+      }
+    }
+
+    async function verifyAdmin(userId) {
+      try {
+        const {
+          data,
+          error,
+        } = await supabase
+          .from("admin_users")
+          .select("user_id")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            "Admin verification error:",
+            error
+          );
+
+          if (mounted) {
+            setIsAdmin(false);
+            setCheckingAdmin(false);
+          }
+
+          return;
+        }
+
+        if (!mounted) return;
+
+        setIsAdmin(!!data);
+        setCheckingAdmin(false);
+      } catch (error) {
+        console.error(
+          "Admin verification exception:",
+          error
+        );
+
+        if (mounted) {
+          setIsAdmin(false);
+          setCheckingAdmin(false);
+        }
+      }
+    }
+
+    loadSession();
+
+    // Listen for login/logout changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      (_event, currentSession) => {
-        setSession(currentSession);
-        setCheckingSession(false);
-      }
-    );
+    } =
+      supabase.auth.onAuthStateChange(
+        async (_event, newSession) => {
+          if (!mounted) return;
+
+          setSession(newSession);
+
+          if (newSession?.user) {
+            await verifyAdmin(
+              newSession.user.id
+            );
+          } else {
+            setIsAdmin(false);
+            setCheckingAdmin(false);
+          }
+        }
+      );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  async function checkSession() {
+  // ========================================================
+  // CHECK EXISTING EDITION
+  // ========================================================
+
+  useEffect(() => {
+    if (!isAdmin || !date) {
+      setExistingEdition(null);
+      return;
+    }
+
+    checkEdition(date);
+  }, [date, isAdmin]);
+
+  async function checkEdition(
+    selectedDate
+  ) {
+    if (!selectedDate) {
+      setExistingEdition(null);
+      return;
+    }
+
     try {
+      setCheckingEdition(true);
+
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("editions")
+        .select(
+          "id, created_at, date, title, pdf_path"
+        )
+        .eq("date", selectedDate)
+        .maybeSingle();
+
+      if (error) {
+        console.error(
+          "Edition check error:",
+          error
+        );
+
+        setExistingEdition(null);
+
+        setMessage(
+          "Unable to check whether this date already exists."
+        );
+
+        setMessageType("error");
+
+        return;
+      }
+
+      if (data) {
+        setExistingEdition(data);
+
+        setMessage(
+          `A newspaper for ${selectedDate} already exists. You can replace or delete it.`
+        );
+
+        setMessageType("info");
+      } else {
+        setExistingEdition(null);
+
+        setMessage(
+          `No newspaper exists for ${selectedDate}. You can upload a new edition.`
+        );
+
+        setMessageType("success");
+      }
+    } catch (error) {
+      console.error(
+        "Check edition exception:",
+        error
+      );
+
+      setExistingEdition(null);
+
+      setMessage(
+        "Unable to check the selected newspaper date."
+      );
+
+      setMessageType("error");
+    } finally {
+      setCheckingEdition(false);
+    }
+  }
+
+  // ========================================================
+  // FILE SELECTION
+  // ANDROID / IOS FRIENDLY
+  // ========================================================
+
+  function handleFileChange(event) {
+    const input =
+      event.currentTarget;
+
+    const selectedFile =
+      input.files &&
+      input.files.length > 0
+        ? input.files[0]
+        : null;
+
+    setMessage("");
+    setMessageType("");
+
+    // User cancelled the Android/iOS file picker
+    if (!selectedFile) {
+      setFile(null);
+      return;
+    }
+
+    const fileName =
+      String(
+        selectedFile.name || ""
+      ).toLowerCase();
+
+    const fileType =
+      String(
+        selectedFile.type || ""
+      ).toLowerCase();
+
+    // Some mobile file pickers don't always provide
+    // the MIME type correctly.
+    const isPdf =
+      fileType ===
+        "application/pdf" ||
+      fileName.endsWith(".pdf");
+
+    if (!isPdf) {
+      setFile(null);
+
+      setMessage(
+        "Please select a PDF file only."
+      );
+
+      setMessageType("error");
+
+      input.value = "";
+
+      return;
+    }
+
+    // Make sure the selected file is valid
+    if (selectedFile.size <= 0) {
+      setFile(null);
+
+      setMessage(
+        "The selected PDF appears to be empty. Please choose another PDF."
+      );
+
+      setMessageType("error");
+
+      input.value = "";
+
+      return;
+    }
+
+    setFile(selectedFile);
+
+    console.log(
+      "================================="
+    );
+
+    console.log(
+      "PDF SELECTED"
+    );
+
+    console.log(
+      "Name:",
+      selectedFile.name
+    );
+
+    console.log(
+      "Type:",
+      selectedFile.type
+    );
+
+    console.log(
+      "Size:",
+      selectedFile.size
+    );
+
+    console.log(
+      "Last modified:",
+      selectedFile.lastModified
+    );
+
+    console.log(
+      "================================="
+    );
+
+    setMessage(
+      `PDF selected successfully: ${selectedFile.name}`
+    );
+
+    setMessageType("success");
+  }
+
+  // ========================================================
+  // GENERATE THUMBNAIL
+  // ========================================================
+
+  async function generateAndUploadThumbnail(
+    selectedFile,
+    selectedDate
+  ) {
+    let pdf = null;
+
+    try {
+      const arrayBuffer =
+        await selectedFile.arrayBuffer();
+
+      const loadingTask =
+        getDocument({
+          data: new Uint8Array(arrayBuffer),
+          wasmUrl: PDF_WASM_URL,
+        });
+
+      pdf = await loadingTask.promise;
+
+      const page = await pdf.getPage(1);
+
+      const baseViewport = page.getViewport({ scale: 1 });
+      const targetWidth = 700;
+      const scale = targetWidth / baseViewport.width;
+
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+
+      const context = canvas.getContext("2d", { alpha: false });
+
+      if (!context) {
+        throw new Error("Could not create thumbnail canvas.");
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({
+        canvasContext: context,
+        viewport,
+        intent: "display",
+      }).promise;
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (result) => {
+            if (result) {
+              resolve(result);
+            } else {
+              reject(new Error("Could not create thumbnail image."));
+            }
+          },
+          "image/jpeg",
+          0.82
+        );
+      });
+
+      const thumbnailPath = `thumbnails/${selectedDate}.jpg`;
+
+      console.log(
+        "Preparing R2 thumbnail upload:",
+        thumbnailPath
+      );
+
       const {
         data: { session: currentSession },
         error: sessionError,
       } = await supabase.auth.getSession();
 
       if (sessionError) {
-        console.error(
-          "Session error:",
-          sessionError
+        throw sessionError;
+      }
+
+      if (!currentSession?.access_token) {
+        throw new Error(
+          "Your admin login session has expired. Please sign in again."
         );
       }
 
-      setSession(currentSession);
-    } catch (err) {
-      console.error(
-        "Unable to get session:",
-        err
-      );
-    } finally {
-      setCheckingSession(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!date) {
-      setExistingEdition(null);
-      return;
-    }
-
-    checkExistingEdition();
-  }, [date]);
-
-  async function checkExistingEdition() {
-    setCheckingEdition(true);
-    setExistingEdition(null);
-
-    try {
-      const {
-        data,
-        error: fetchError,
-      } = await supabase
-        .from("editions")
-        .select("*")
-        .eq("date", date)
-        .maybeSingle();
-
-      if (fetchError) {
-        console.error(
-          "Edition check error:",
-          fetchError
-        );
-        return;
-      }
-
-      if (data) {
-        setExistingEdition(data);
-      }
-    } catch (err) {
-      console.error(
-        "Edition check failed:",
-        err
-      );
-    } finally {
-      setCheckingEdition(false);
-    }
-  }
-
-  function handleFileChange(event) {
-    const file =
-      event.target.files?.[0] || null;
-
-    setPdfFile(file);
-    setMessage("");
-    setError("");
-
-    if (
-      file &&
-      file.type !== "application/pdf"
-    ) {
-      setError(
-        "Please select a PDF file."
-      );
-      setPdfFile(null);
-    }
-  }
-
-  async function createThumbnail(file) {
-    try {
-      const arrayBuffer =
-        await file.arrayBuffer();
-
-      const pdf =
-        await pdfjsLib.getDocument({
-          data: arrayBuffer,
-        }).promise;
-
-      const page =
-        await pdf.getPage(1);
-
-      const viewport =
-        page.getViewport({
-          scale: 0.5,
-        });
-
-      const canvas =
-        document.createElement("canvas");
-
-      const context =
-        canvas.getContext("2d");
-
-      canvas.width =
-        viewport.width;
-
-      canvas.height =
-        viewport.height;
-
-      await page.render({
-        canvasContext: context,
-        viewport,
-      }).promise;
-
-      return new Promise(
-        (resolve, reject) => {
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
-                reject(
-                  new Error(
-                    "Unable to create thumbnail."
-                  )
-                );
-              }
-            },
-            "image/jpeg",
-            0.8
-          );
-        }
-      );
-    } catch (err) {
-      console.error(
-        "Thumbnail creation error:",
-        err
-      );
-
-      return null;
-    }
-  }
-
-  async function uploadThumbnail(
-    thumbnailBlob,
-    thumbnailPath
-  ) {
-    if (!thumbnailBlob) {
-      return;
-    }
-
-    const {
-      error: uploadError,
-    } = await supabase.storage
-      .from("newspapers")
-      .upload(
-        thumbnailPath,
-        thumbnailBlob,
-        {
-          contentType:
-            "image/jpeg",
-          upsert: true,
-        }
-      );
-
-    if (uploadError) {
-      console.error(
-        "Thumbnail upload error:",
-        uploadError
-      );
-    }
-  }
-
-  async function getR2UploadUrl(
-    fileName,
-    currentSession
-  ) {
-    if (
-      !currentSession?.access_token
-    ) {
-      throw new Error(
-        "Your login session has expired. Please login again."
-      );
-    }
-
-    const response =
-      await fetch(
+      const r2Response = await fetch(
         "/api/R2Upload",
         {
           method: "POST",
-
           headers: {
-            "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${currentSession.access_token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${currentSession.access_token}`,
           },
-
           body: JSON.stringify({
-            fileName,
-            contentType:
-              "application/pdf",
+            fileName: thumbnailPath,
+            contentType: "image/jpeg",
           }),
         }
       );
 
-    let data = null;
+      let r2Data = null;
 
-    try {
-      data =
-        await response.json();
-    } catch {
-      throw new Error(
-        `R2 server returned HTTP ${response.status}.`
-      );
-    }
+      try {
+        r2Data = await r2Response.json();
+      } catch {
+        throw new Error(
+          `R2 thumbnail server returned an invalid response (${r2Response.status}).`
+        );
+      }
 
-    if (
-      !response.ok ||
-      !data?.success
-    ) {
-      throw new Error(
-        data?.error ||
-          `R2 upload request failed with HTTP ${response.status}.`
-      );
-    }
+      if (!r2Response.ok || !r2Data?.uploadUrl) {
+        throw new Error(
+          r2Data?.error ||
+            `Unable to prepare R2 thumbnail upload (${r2Response.status}).`
+        );
+      }
 
-    if (!data.uploadUrl) {
-      throw new Error(
-        "R2 upload URL was not returned."
-      );
-    }
-
-    return data;
-  }
-
-  async function uploadFileToR2(
-    uploadUrl,
-    file
-  ) {
-    const response =
-      await fetch(
-        uploadUrl,
+      const thumbnailUploadResponse = await fetch(
+        r2Data.uploadUrl,
         {
           method: "PUT",
-
           headers: {
-            "Content-Type":
-              "application/pdf",
+            "Content-Type": "image/jpeg",
           },
-
-          body: file,
+          body: blob,
         }
       );
 
-    if (!response.ok) {
-      const responseText =
-        await response.text();
+      if (!thumbnailUploadResponse.ok) {
+        const errorText = await thumbnailUploadResponse.text();
 
+        console.error(
+          "R2 thumbnail upload failed:",
+          thumbnailUploadResponse.status,
+          errorText
+        );
+
+        throw new Error(
+          `Cloudflare R2 thumbnail upload failed (${thumbnailUploadResponse.status}).`
+        );
+      }
+
+      console.log(
+        "Thumbnail uploaded successfully to R2:",
+        r2Data.publicUrl
+      );
+
+      return true;
+    } catch (error) {
       console.error(
-        "R2 file upload failed:",
-        responseText
+        "Thumbnail generation/R2 upload error:",
+        error
       );
 
       throw new Error(
-        `R2 PDF upload failed with HTTP ${response.status}.`
+        error?.message ||
+          "Unable to generate or upload newspaper thumbnail."
       );
+    } finally {
+      if (pdf) {
+        try {
+          await pdf.destroy();
+        } catch (destroyError) {
+          console.warn(
+            "PDF destroy warning:",
+            destroyError
+          );
+        }
+      }
     }
   }
 
-  async function handleUpload() {
-    setMessage("");
-    setError("");
+  // ========================================================
+  // UPLOAD / REPLACE
+  // ========================================================
 
-    if (!session) {
-      setError(
-        "Please login again."
+  async function handleUpload(
+    event
+  ) {
+    event.preventDefault();
+
+    setMessage("");
+    setMessageType("");
+
+    // ------------------------------------------------------
+    // Validation
+    // ------------------------------------------------------
+
+    if (!session?.user) {
+      setMessage(
+        "Your admin session has expired. Please sign in again."
       );
+
+      setMessageType(
+        "error"
+      );
+
+      return;
+    }
+
+    if (!isAdmin) {
+      setMessage(
+        "You do not have administrator access."
+      );
+
+      setMessageType(
+        "error"
+      );
+
       return;
     }
 
     if (!date) {
-      setError(
+      setMessage(
         "Please select a newspaper date."
       );
+
+      setMessageType(
+        "error"
+      );
+
       return;
     }
 
-    if (!pdfFile) {
-      setError(
+    if (!file) {
+      setMessage(
         "Please select a PDF file."
       );
-      return;
-    }
 
-    if (
-      pdfFile.type !==
-      "application/pdf"
-    ) {
-      setError(
-        "Only PDF files are allowed."
+      setMessageType(
+        "error"
       );
+
       return;
     }
 
-    setUploading(true);
+    // ------------------------------------------------------
+    // Double-check PDF
+    // ------------------------------------------------------
+
+    const fileName =
+      String(
+        file.name || ""
+      ).toLowerCase();
+
+    const fileType =
+      String(
+        file.type || ""
+      ).toLowerCase();
+
+    const isPdf =
+      fileType ===
+        "application/pdf" ||
+      fileName.endsWith(".pdf");
+
+    if (!isPdf) {
+      setMessage(
+        "Please select a PDF file only."
+      );
+
+      setMessageType(
+        "error"
+      );
+
+      return;
+    }
 
     try {
-      const fileName =
+      setUploading(true);
+
+      const filePath =
         `${date}.pdf`;
 
-      const thumbnailPath =
-        `thumbnails/${date}.jpg`;
+      console.log(
+        "================================="
+      );
 
-      const thumbnailBlob =
-        await createThumbnail(
-          pdfFile
-        );
+      console.log(
+        "STARTING NEWSPAPER UPLOAD"
+      );
 
-      // =====================================================
-      // EXISTING EDITION
-      // =====================================================
+      console.log(
+        "Date:",
+        date
+      );
+
+      console.log(
+        "File:",
+        file.name
+      );
+
+      console.log(
+        "Size:",
+        file.size
+      );
+
+      console.log(
+        "Existing edition:",
+        !!existingEdition
+      );
+
+      console.log(
+        "File path:",
+        filePath
+      );
+
+      console.log(
+        "================================="
+      );
+
+      // ====================================================
+      // REPLACE EXISTING EDITION
+      // ====================================================
 
       if (existingEdition) {
-        const shouldReplace =
-          window.confirm(
-            `An edition already exists for ${date}.\n\nDo you want to replace it?`
-          );
-
-        if (!shouldReplace) {
-          setUploading(false);
-          return;
-        }
-
-        const r2Data =
-          await getR2UploadUrl(
-            fileName,
-            session
-          );
-
-        await uploadFileToR2(
-          r2Data.uploadUrl,
-          pdfFile
-        );
-
-        const publicUrl =
-          r2Data.publicUrl ||
-          `${R2_PUBLIC_BASE_URL}/${encodeURIComponent(
-            fileName
-          )}`;
-
-        await uploadThumbnail(
-          thumbnailBlob,
-          thumbnailPath
-        );
-
-        const {
-          error: updateError,
-        } = await supabase
-          .from("editions")
-          .update({
-            title:
-              "SHUBHODAYAM BHARATH",
-
-            pdf_path:
-              publicUrl,
-
-          })
-          .eq(
-            "date",
-            date
-          );
-
-        if (updateError) {
-          console.error(
-            "Edition update error:",
-            updateError
-          );
-
-          throw new Error(
-            updateError.message
-          );
-        }
-
         setMessage(
-          `${date} newspaper replaced successfully.`
+          "Uploading replacement newspaper to Cloudflare R2..."
         );
-      }
 
-      // =====================================================
-      // NEW EDITION
-      // =====================================================
+        setMessageType(
+          "info"
+        );
 
-      else {
-        const r2Data =
-          await getR2UploadUrl(
-            fileName,
-            session
+        // --------------------------------------------------
+        // Ask Vercel for a temporary R2 upload URL
+        // --------------------------------------------------
+
+        const r2Response =
+          await fetch(
+            "/api/R2Upload",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify(
+                {
+                  fileName:
+                    filePath,
+                  contentType:
+                    "application/pdf",
+                }
+              ),
+            }
           );
 
-        await uploadFileToR2(
-          r2Data.uploadUrl,
-          pdfFile
-        );
+        let r2Data =
+          null;
 
-        const publicUrl =
-          r2Data.publicUrl ||
-          `${R2_PUBLIC_BASE_URL}/${encodeURIComponent(
-            fileName
-          )}`;
+        try {
+          r2Data =
+            await r2Response.json();
+        } catch {
+          throw new Error(
+            `R2 server returned an invalid response (${r2Response.status}).`
+          );
+        }
 
-        await uploadThumbnail(
-          thumbnailBlob,
-          thumbnailPath
-        );
-
-        const {
-          data,
-          error: insertError,
-        } = await supabase
-          .from("editions")
-          .insert({
-            date,
-
-            title:
-              "SHUBHODAYAM BHARATH",
-
-            pdf_path:
-              publicUrl,
-
-          })
-          .select()
-          .single();
-
-        if (insertError) {
+        if (
+          !r2Response.ok ||
+          !r2Data?.uploadUrl
+        ) {
           console.error(
-            "Edition save error:",
-            insertError
+            "R2 upload URL error:",
+            r2Data
           );
 
           throw new Error(
-            insertError.message
+            r2Data?.error ||
+              `Unable to prepare R2 upload (${r2Response.status}).`
           );
         }
 
         console.log(
-          "Edition saved:",
-          data
+          "R2 upload URL received."
         );
 
+        // --------------------------------------------------
+        // Upload PDF directly to R2
+        // --------------------------------------------------
+
+        const r2UploadResponse =
+          await fetch(
+            r2Data.uploadUrl,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type":
+                  "application/pdf",
+              },
+              body: file,
+            }
+          );
+
+        if (
+          !r2UploadResponse.ok
+        ) {
+          const r2ErrorText =
+            await r2UploadResponse.text();
+
+          console.error(
+            "R2 PDF upload failed:",
+            r2UploadResponse.status,
+            r2ErrorText
+          );
+
+          throw new Error(
+            `Cloudflare R2 upload failed (${r2UploadResponse.status}).`
+          );
+        }
+
+        console.log(
+          "PDF uploaded successfully to R2."
+        );
+
+        console.log(
+          "R2 public URL:",
+          r2Data.publicUrl
+        );
+
+        // --------------------------------------------------
+        // Update database record
+        // --------------------------------------------------
+
+        const {
+          error:
+            updateEditionError,
+        } =
+          await supabase
+            .from("editions")
+            .update({
+              pdf_path:
+                r2Data.publicUrl,
+            })
+            .eq(
+              "id",
+              existingEdition.id
+            );
+
+        if (
+          updateEditionError
+        ) {
+          console.error(
+            "Edition update error:",
+            updateEditionError
+          );
+
+          throw updateEditionError;
+        }
+
+        console.log(
+          "Edition database record updated with R2 URL."
+        );
+
+        // --------------------------------------------------
+        // Thumbnail
+        // --------------------------------------------------
+
+        const thumbnailCreated =
+          await generateAndUploadThumbnail(
+            file,
+            date
+          );
+
+        if (
+          !thumbnailCreated
+        ) {
+          setMessage(
+            `${date} replaced successfully, but the thumbnail could not be generated.`
+          );
+
+          setMessageType(
+            "info"
+          );
+        } else {
+          setMessage(
+            `${date} newspaper replaced successfully.`
+          );
+
+          setMessageType(
+            "success"
+          );
+        }
+
+        // --------------------------------------------------
+        // Refresh edition
+        // --------------------------------------------------
+
+        await checkEdition(
+          date
+        );
+
+        // Keep successful replacement message
+        if (
+          thumbnailCreated
+        ) {
+          setMessage(
+            `${date} newspaper replaced successfully.`
+          );
+
+          setMessageType(
+            "success"
+          );
+        }
+
+        // --------------------------------------------------
+        // Clear selected file
+        // --------------------------------------------------
+
+        setFile(null);
+
+        if (
+          fileInputRef.current
+        ) {
+          fileInputRef.current.value =
+            "";
+        }
+
+        return;
+      }
+
+      // ====================================================
+      // NEW EDITION
+      // ====================================================
+
+      setMessage(
+        "Uploading newspaper PDF to Cloudflare R2..."
+      );
+
+      setMessageType(
+        "info"
+      );
+
+      // ------------------------------------------------------
+      // Ask Vercel for a temporary R2 upload URL
+      // ------------------------------------------------------
+
+      const r2Response =
+        await fetch(
+          "/api/R2Upload",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify(
+              {
+                fileName:
+                  filePath,
+                contentType:
+                  "application/pdf",
+              }
+            ),
+          }
+        );
+
+      let r2Data =
+        null;
+
+      try {
+        r2Data =
+          await r2Response.json();
+      } catch {
+        throw new Error(
+          `R2 server returned an invalid response (${r2Response.status}).`
+        );
+      }
+
+      if (
+        !r2Response.ok ||
+        !r2Data?.uploadUrl
+      ) {
+        console.error(
+          "R2 upload URL error:",
+          r2Data
+        );
+
+        throw new Error(
+          r2Data?.error ||
+            `Unable to prepare R2 upload (${r2Response.status}).`
+        );
+      }
+
+      console.log(
+        "R2 upload URL received."
+      );
+
+      // ------------------------------------------------------
+      // Upload PDF directly to R2
+      // ------------------------------------------------------
+
+      const r2UploadResponse =
+        await fetch(
+          r2Data.uploadUrl,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type":
+                "application/pdf",
+            },
+            body: file,
+          }
+        );
+
+      if (
+        !r2UploadResponse.ok
+      ) {
+        const r2ErrorText =
+          await r2UploadResponse.text();
+
+        console.error(
+          "R2 PDF upload failed:",
+          r2UploadResponse.status,
+          r2ErrorText
+        );
+
+        throw new Error(
+          `Cloudflare R2 upload failed (${r2UploadResponse.status}).`
+        );
+      }
+
+      console.log(
+        "PDF uploaded successfully to R2."
+      );
+
+      console.log(
+        "R2 public URL:",
+        r2Data.publicUrl
+      );
+
+      // ====================================================
+      // SAVE EDITION IN DATABASE
+      // ====================================================
+
+      const {
+        data:
+          insertedEdition,
+        error: insertError,
+      } =
+        await supabase
+          .from("editions")
+          .insert({
+            date,
+            title:
+              "SHUBHODAYAM BHARATH",
+            pdf_path:
+              r2Data.publicUrl,
+          })
+          .select()
+          .single();
+
+      if (insertError) {
+        console.error(
+          "Edition insert error:",
+          insertError
+        );
+
+        // IMPORTANT:
+        // We do NOT delete the R2 file here yet.
+        // R2 deletion will be handled through a secure
+        // Vercel API endpoint that we will add separately.
+
+        throw insertError;
+      }
+
+      console.log(
+        "Edition saved successfully:",
+        insertedEdition
+      );
+
+      // ====================================================
+      // GENERATE THUMBNAIL
+      // ====================================================
+
+      setMessage(
+        "Generating newspaper thumbnail..."
+      );
+
+      setMessageType(
+        "info"
+      );
+
+      const thumbnailCreated =
+        await generateAndUploadThumbnail(
+          file,
+          date
+        );
+
+      // ====================================================
+      // SUCCESS
+      // ====================================================
+
+      if (
+        thumbnailCreated
+      ) {
         setMessage(
           `${date} newspaper uploaded successfully.`
         );
-      }
 
-      setPdfFile(null);
-      setExistingEdition(null);
-
-      const fileInput =
-        document.getElementById(
-          "pdf-upload"
+        setMessageType(
+          "success"
+        );
+      } else {
+        setMessage(
+          `${date} newspaper uploaded successfully, but the thumbnail could not be generated.`
         );
 
-      if (fileInput) {
-        fileInput.value = "";
+        setMessageType(
+          "info"
+        );
       }
 
-      await checkExistingEdition();
-    } catch (err) {
-      console.error(
-        "Newspaper upload failed:",
-        err
+      // Refresh existing edition state
+      await checkEdition(
+        date
       );
 
-      setError(
-        `Newspaper upload failed: ${
-          err?.message ||
-          "Unknown error"
-        }`
+      // Keep correct final message
+      if (
+        thumbnailCreated
+      ) {
+        setMessage(
+          `${date} newspaper uploaded successfully.`
+        );
+
+        setMessageType(
+          "success"
+        );
+      } else {
+        setMessage(
+          `${date} newspaper uploaded successfully, but the thumbnail could not be generated.`
+        );
+
+        setMessageType(
+          "info"
+        );
+      }
+
+      // Clear selected file
+      setFile(null);
+
+      if (
+        fileInputRef.current
+      ) {
+        fileInputRef.current.value =
+          "";
+      }
+    } catch (error) {
+      console.error(
+        "================================="
+      );
+
+      console.error(
+        "NEWSPAPER UPLOAD FAILED"
+      );
+
+      console.error(
+        error
+      );
+
+      console.error(
+        "================================="
+      );
+
+      let errorMessage =
+        "Newspaper upload failed.";
+
+      if (
+        error?.message
+      ) {
+        errorMessage =
+          `Newspaper upload failed: ${error.message}`;
+      }
+
+      setMessage(
+        errorMessage
+      );
+
+      setMessageType(
+        "error"
       );
     } finally {
       setUploading(false);
     }
   }
 
-  async function handleDelete() {
-    setMessage("");
-    setError("");
+  // ========================================================
+  // DELETE EDITION
+  // ========================================================
+  //
+  // IMPORTANT:
+  // The PDF is now stored in R2.
+  //
+  // We are intentionally NOT deleting the PDF here yet.
+  // We will add a secure R2 delete API next.
+  //
+  // The existing thumbnail is still stored in Supabase.
+  // ========================================================
 
-    if (!session) {
-      setError(
-        "Please login again."
+  async function handleDelete() {
+    if (!session?.user) {
+      setMessage(
+        "Your admin session has expired. Please sign in again."
       );
+      setMessageType("error");
       return;
     }
 
-    if (!date) {
-      setError(
-        "Please select a newspaper date."
+    if (!isAdmin) {
+      setMessage(
+        "You do not have administrator access."
       );
+      setMessageType("error");
       return;
     }
 
     if (!existingEdition) {
-      setError(
-        "No newspaper edition exists for this date."
+      setMessage(
+        "There is no newspaper to delete for this date."
       );
+      setMessageType("error");
       return;
     }
 
-    const shouldDelete =
-      window.confirm(
-        `Are you sure you want to delete the ${date} newspaper?\n\nThis will remove the edition from the website.`
-      );
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the newspaper for ${date}? This cannot be undone.`
+    );
 
-    if (!shouldDelete) {
+    if (!confirmed) {
       return;
     }
-
-    setDeleting(true);
 
     try {
+      setDeleting(true);
+      setMessage("Deleting newspaper...");
+      setMessageType("info");
+
       const filePath =
         existingEdition.pdf_path ||
-        existingEdition.pdf_url ||
-        existingEdition.pdfUrl ||
-        "";
+        `${date}.pdf`;
 
-      // =====================================================
-      // R2 DELETE
-      // =====================================================
+      // ====================================================
+      // CLOUDFLARE R2 PDF
+      // ====================================================
 
       if (
-        filePath &&
-        /\.r2\.dev\//i.test(
-          filePath
-        )
+        typeof filePath === "string" &&
+        /^https?:\/\//i.test(filePath) &&
+        filePath.includes(".r2.dev/")
       ) {
         let r2FileName = "";
 
         try {
-          const url =
-            new URL(filePath);
+          const r2Url = new URL(filePath);
 
-          const pathname =
-            url.pathname;
-
-          r2FileName =
-            decodeURIComponent(
-              pathname
-                .split("/")
-                .filter(Boolean)
-                .pop() || ""
-            );
+          r2FileName = decodeURIComponent(
+            r2Url.pathname
+              .split("/")
+              .filter(Boolean)
+              .pop() || ""
+          );
         } catch (urlError) {
           console.error(
-            "Invalid R2 URL:",
+            "Invalid R2 PDF URL:",
             urlError
           );
 
           throw new Error(
-            "Invalid R2 PDF URL."
+            "The newspaper PDF URL is invalid."
           );
         }
 
-        if (
-          !r2FileName ||
-          !r2FileName
-            .toLowerCase()
-            .endsWith(".pdf")
-        ) {
+        if (!r2FileName) {
           throw new Error(
-            "Invalid R2 PDF file name."
+            "Unable to determine the R2 PDF filename."
           );
         }
 
-        const response =
-          await fetch(
-            "/api/R2Delete",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-
-                Authorization:
-                  `Bearer ${session.access_token}`,
-              },
-
-              body: JSON.stringify({
-                fileName:
-                  r2FileName,
-              }),
-            }
-          );
-
-        let data = null;
-
-        try {
-          data =
-            await response.json();
-        } catch {
+        if (!r2FileName.toLowerCase().endsWith(".pdf")) {
           throw new Error(
-            `R2 delete server returned HTTP ${response.status}.`
-          );
-        }
-
-        if (
-          !response.ok ||
-          !data?.success
-        ) {
-          throw new Error(
-            data?.error ||
-              `R2 delete failed with HTTP ${response.status}.`
+            "The R2 file is not a PDF."
           );
         }
 
         console.log(
-          "R2 PDF deleted:",
+          "Deleting R2 PDF:",
+          r2FileName
+        );
+
+        const r2DeleteResponse = await fetch(
+          "/api/R2Delete",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              fileName: r2FileName,
+            }),
+          }
+        );
+
+        let r2DeleteData = null;
+
+        try {
+          r2DeleteData =
+            await r2DeleteResponse.json();
+        } catch {
+          throw new Error(
+            `R2 delete server returned an invalid response (${r2DeleteResponse.status}).`
+          );
+        }
+
+        if (
+          !r2DeleteResponse.ok ||
+          !r2DeleteData?.success
+        ) {
+          console.error(
+            "R2 delete API error:",
+            r2DeleteData
+          );
+
+          throw new Error(
+            r2DeleteData?.error ||
+              `Unable to delete R2 PDF (${r2DeleteResponse.status}).`
+          );
+        }
+
+        console.log(
+          "R2 PDF deleted successfully:",
           r2FileName
         );
       }
 
-      // =====================================================
-      // OLD SUPABASE STORAGE DELETE
-      // =====================================================
+      // ====================================================
+      // LEGACY SUPABASE PDF
+      // ====================================================
 
-      else if (
-        filePath
-      ) {
-        const storagePrefix =
-          "/storage/v1/object/public/newspapers/";
-
-        if (
-          filePath.includes(
-            storagePrefix
-          )
-        ) {
-          const storagePath =
-            filePath.split(
-              storagePrefix
-            )[1];
-
-          if (storagePath) {
-            const {
-              error:
-                storageDeleteError,
-            } = await supabase.storage
-              .from("newspapers")
-              .remove([
-                decodeURIComponent(
-                  storagePath
-                ),
-              ]);
-
-            if (
-              storageDeleteError
-            ) {
-              console.error(
-                "Supabase storage delete error:",
-                storageDeleteError
-              );
-            }
-          }
-        }
-      }
-
-      // =====================================================
-      // DELETE THUMBNAIL
-      // =====================================================
-
-      const thumbnailPath =
-        existingEdition.thumbnail_path ||
-        `thumbnails/${date}.jpg`;
-
-      if (
-        thumbnailPath
-      ) {
+      else {
         const {
-          error:
-            thumbnailDeleteError,
+          error: storageDeleteError,
         } = await supabase.storage
           .from("newspapers")
-          .remove([
-            thumbnailPath,
-          ]);
+          .remove([filePath]);
 
-        if (
-          thumbnailDeleteError
-        ) {
+        if (storageDeleteError) {
           console.error(
-            "Thumbnail delete error:",
-            thumbnailDeleteError
+            "PDF delete error:",
+            storageDeleteError
           );
+
+          throw storageDeleteError;
         }
+
+        console.log(
+          "Legacy Supabase PDF deleted:",
+          filePath
+        );
       }
 
-      // =====================================================
-      // DELETE DATABASE ROW
-      // =====================================================
+      // ====================================================
+      // DELETE THUMBNAIL FROM CLOUDFLARE R2
+      // ====================================================
+
+      const thumbnailPath =
+        `thumbnails/${date}.jpg`;
+
+      try {
+        const thumbnailDeleteResponse =
+          await fetch("/api/R2Delete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              fileName: thumbnailPath,
+            }),
+          });
+
+        let thumbnailDeleteData = null;
+
+        try {
+          thumbnailDeleteData =
+            await thumbnailDeleteResponse.json();
+        } catch {
+          throw new Error(
+            `R2 thumbnail delete server returned an invalid response (${thumbnailDeleteResponse.status}).`
+          );
+        }
+
+        if (
+          !thumbnailDeleteResponse.ok ||
+          !thumbnailDeleteData?.success
+        ) {
+          console.warn(
+            "R2 thumbnail delete warning:",
+            thumbnailDeleteData
+          );
+        } else {
+          console.log(
+            "R2 thumbnail deleted successfully:",
+            thumbnailPath
+          );
+        }
+      } catch (thumbnailDeleteError) {
+        console.warn(
+          "R2 thumbnail delete warning:",
+          thumbnailDeleteError
+        );
+      }
+
+      // ====================================================
+      // DELETE DATABASE EDITION
+      // ====================================================
 
       const {
-        error: deleteError,
+        error: editionDeleteError,
       } = await supabase
         .from("editions")
         .delete()
-        .eq(
-          "date",
-          date
-        );
+        .eq("id", existingEdition.id);
 
-      if (deleteError) {
+      if (editionDeleteError) {
         console.error(
           "Edition database delete error:",
-          deleteError
+          editionDeleteError
         );
 
-        throw new Error(
-          deleteError.message
-        );
+        throw editionDeleteError;
+      }
+
+      console.log(
+        "Edition deleted from database."
+      );
+
+      // ====================================================
+      // CLEAR STATE
+      // ====================================================
+
+      setExistingEdition(null);
+      setFile(null);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
 
       setMessage(
         `${date} newspaper deleted successfully.`
       );
 
-      setExistingEdition(
-        null
-      );
-
-      setPdfFile(null);
-    } catch (err) {
+      setMessageType("success");
+    } catch (error) {
       console.error(
-        "Newspaper deletion failed:",
-        err
+        "Delete error:",
+        error
       );
 
-      setError(
-        `Newspaper deletion failed: ${
-          err?.message ||
-          "Unknown error"
-        }`
+      setMessage(
+        error?.message
+          ? `Delete failed: ${error.message}`
+          : "Newspaper deletion failed."
       );
+
+      setMessageType("error");
     } finally {
       setDeleting(false);
     }
   }
 
+  // ========================================================
+  // LOGOUT
+  // ========================================================
+
   async function handleLogout() {
     try {
       await supabase.auth.signOut();
-    } catch (err) {
+
+      setSession(null);
+      setIsAdmin(false);
+      setFile(null);
+      setExistingEdition(
+        null
+      );
+
+      if (
+        fileInputRef.current
+      ) {
+        fileInputRef.current.value =
+          "";
+      }
+    } catch (error) {
       console.error(
         "Logout error:",
-        err
+        error
+      );
+
+      setMessage(
+        "Unable to sign out."
+      );
+
+      setMessageType(
+        "error"
       );
     }
   }
 
-  if (checkingSession) {
+  // ========================================================
+  // LOADING
+  // ========================================================
+
+  if (checkingAdmin) {
     return (
       <div
         style={{
-          maxWidth: "900px",
-          margin: "40px auto",
-          padding: "20px",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
+          padding: "24px",
+          background:
+            "#f5f7fb",
         }}
       >
-        <h2>
-          Checking admin session...
-        </h2>
+        <div
+          style={{
+            background:
+              "#ffffff",
+            padding: "32px",
+            borderRadius:
+              "16px",
+            boxShadow:
+              "0 10px 30px rgba(0,0,0,0.08)",
+            textAlign:
+              "center",
+          }}
+        >
+          <h2
+            style={{
+              margin:
+                "0 0 10px",
+            }}
+          >
+            Checking Admin Access
+          </h2>
+
+          <p
+            style={{
+              margin: 0,
+              color: "#666",
+            }}
+          >
+            Please wait...
+          </p>
+        </div>
       </div>
     );
   }
+
+  // ========================================================
+  // NOT LOGGED IN
+  // ========================================================
 
   if (!session) {
     return (
       <div
         style={{
-          maxWidth: "900px",
-          margin: "40px auto",
-          padding: "20px",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
+          padding: "24px",
+          background:
+            "#f5f7fb",
         }}
       >
-        <h2>
-          Admin login required
-        </h2>
-
-        <p>
-          Please login to access
-          the newspaper admin panel.
-        </p>
-
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href =
-              "/admin/login";
-          }}
+        <div
           style={{
-            padding:
-              "10px 18px",
-            cursor:
-              "pointer",
+            width: "100%",
+            maxWidth:
+              "500px",
+            background:
+              "#ffffff",
+            padding: "32px",
+            borderRadius:
+              "18px",
+            boxShadow:
+              "0 10px 35px rgba(0,0,0,0.08)",
+            textAlign:
+              "center",
           }}
         >
-          Go to Admin Login
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        maxWidth: "900px",
-        margin: "30px auto",
-        padding: "20px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent:
-            "space-between",
-          alignItems: "center",
-          marginBottom: "25px",
-          gap: "15px",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
           <h1
             style={{
-              margin: "0 0 5px",
+              marginTop: 0,
+              marginBottom:
+                "10px",
             }}
           >
             Shubhodayam Bharath
-            Admin
           </h1>
 
           <p
             style={{
-              margin: "0",
               color: "#666",
+              marginBottom:
+                "24px",
             }}
           >
-            Newspaper Edition
-            Management
+            Admin access required.
           </p>
-        </div>
 
-        <button
-          type="button"
-          onClick={
-            handleLogout
-          }
-          style={{
-            padding:
-              "9px 16px",
-            cursor:
-              "pointer",
-          }}
-        >
-          Logout
-        </button>
+          <Link
+            to="/admin/login"
+            style={{
+              display:
+                "inline-block",
+              padding:
+                "12px 22px",
+              borderRadius:
+                "10px",
+              textDecoration:
+                "none",
+              background:
+                "#111827",
+              color:
+                "#ffffff",
+              fontWeight: 600,
+            }}
+          >
+            Go to Admin Login
+          </Link>
+        </div>
       </div>
+    );
+  }
 
-      {message && (
-        <div
-          style={{
-            marginBottom: "20px",
-            padding: "12px 15px",
-            border:
-              "1px solid #b7dfb9",
-            background:
-              "#edf9ee",
-            color:
-              "#236b2a",
-            borderRadius: "6px",
-          }}
-        >
-          {message}
-        </div>
-      )}
+  // ========================================================
+  // NOT ADMIN
+  // ========================================================
 
-      {error && (
-        <div
-          style={{
-            marginBottom: "20px",
-            padding: "12px 15px",
-            border:
-              "1px solid #e5b5b5",
-            background:
-              "#fff0f0",
-            color:
-              "#a32121",
-            borderRadius: "6px",
-          }}
-        >
-          {error}
-        </div>
-      )}
-
+  if (!isAdmin) {
+    return (
       <div
         style={{
-          border:
-            "1px solid #ddd",
-          borderRadius: "10px",
-          padding: "20px",
-          background: "#fff",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems:
+            "center",
+          justifyContent:
+            "center",
+          padding: "24px",
+          background:
+            "#f5f7fb",
         }}
       >
         <div
           style={{
-            marginBottom: "20px",
+            width: "100%",
+            maxWidth:
+              "500px",
+            background:
+              "#ffffff",
+            padding: "32px",
+            borderRadius:
+              "18px",
+            boxShadow:
+              "0 10px 35px rgba(0,0,0,0.08)",
+            textAlign:
+              "center",
           }}
         >
-          <label
-            htmlFor="edition-date"
+          <h1
             style={{
-              display: "block",
-              fontWeight: "600",
-              marginBottom: "8px",
+              marginTop: 0,
             }}
           >
-            Newspaper Date
-          </label>
+            Access Denied
+          </h1>
 
-          <input
-            id="edition-date"
-            type="date"
-            value={date}
-            onChange={(event) =>
-              setDate(
-                event.target.value
-              )
-            }
-            disabled={
-              uploading ||
-              deleting
-            }
-            style={{
-              padding: "10px",
-              width: "100%",
-              maxWidth: "300px",
-              boxSizing:
-                "border-box",
-            }}
-          />
-        </div>
-
-        {checkingEdition && (
           <p
             style={{
               color: "#666",
             }}
           >
-            Checking existing
-            edition...
+            Your account does not have
+            administrator permission.
           </p>
-        )}
 
-        {existingEdition && (
-          <div
+          <button
+            type="button"
+            onClick={
+              handleLogout
+            }
             style={{
-              marginBottom: "20px",
-              padding: "15px",
-              border:
-                "1px solid #ddd",
-              borderRadius: "6px",
-              background: "#fafafa",
+              marginTop:
+                "20px",
+              padding:
+                "12px 22px",
+              border: "none",
+              borderRadius:
+                "10px",
+              background:
+                "#111827",
+              color:
+                "#ffffff",
+              fontWeight: 600,
+              cursor:
+                "pointer",
             }}
           >
-            <strong>
-              Edition already exists
-            </strong>
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-            <p
-              style={{
-                margin:
-                  "8px 0 0",
-              }}
-            >
-              Date:{" "}
-              {
-                existingEdition.date
-              }
-            </p>
+  // ========================================================
+  // MAIN ADMIN PAGE
+  // ========================================================
 
-            {existingEdition.pdf_path && (
+  return (
+    <div
+      style={{
+        minHeight:
+          "100vh",
+        background:
+          "#f5f7fb",
+        padding:
+          "24px 16px 50px",
+      }}
+    >
+      <div
+        style={{
+          width:
+            "100%",
+          maxWidth:
+            "800px",
+          margin:
+            "0 auto",
+        }}
+      >
+        {/* ==================================================
+            HEADER
+        ================================================== */}
+
+        <div
+          style={{
+            background:
+              "#ffffff",
+            borderRadius:
+              "18px",
+            padding:
+              "24px",
+            marginBottom:
+              "18px",
+            boxShadow:
+              "0 8px 30px rgba(0,0,0,0.07)",
+          }}
+        >
+          <div
+            style={{
+              display:
+                "flex",
+              justifyContent:
+                "space-between",
+              alignItems:
+                "center",
+              gap:
+                "15px",
+              flexWrap:
+                "wrap",
+            }}
+          >
+            <div>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize:
+                    "28px",
+                }}
+              >
+                Shubhodayam Bharath
+              </h1>
+
               <p
                 style={{
                   margin:
-                    "5px 0 0",
-                  wordBreak:
-                    "break-all",
-                  fontSize:
-                    "13px",
+                    "6px 0 0",
                   color:
                     "#666",
                 }}
               >
-                PDF:{" "}
-                {
-                  existingEdition.pdf_path
-                }
+                Newspaper Administration
               </p>
-            )}
+            </div>
 
-            <p
-              style={{
-                margin:
-                  "10px 0 0",
-                color:
-                  "#9a5b00",
-              }}
-            >
-              Uploading this date
-              will replace the
-              existing edition.
-            </p>
-          </div>
-        )}
-
-        <div
-          style={{
-            marginBottom: "20px",
-          }}
-        >
-          <label
-            htmlFor="pdf-upload"
-            style={{
-              display: "block",
-              fontWeight: "600",
-              marginBottom: "8px",
-            }}
-          >
-            Newspaper PDF
-          </label>
-
-          <input
-            id="pdf-upload"
-            type="file"
-            accept="application/pdf,.pdf"
-            onChange={
-              handleFileChange
-            }
-            disabled={
-              uploading ||
-              deleting
-            }
-          />
-
-          {pdfFile && (
-            <p
-              style={{
-                marginTop:
-                  "8px",
-                color:
-                  "#555",
-              }}
-            >
-              Selected:{" "}
-              <strong>
-                {pdfFile.name}
-              </strong>
-            </p>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            type="button"
-            onClick={
-              handleUpload
-            }
-            disabled={
-              uploading ||
-              deleting ||
-              checkingEdition
-            }
-            style={{
-              padding:
-                "11px 20px",
-              cursor:
-                uploading ||
-                deleting
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {uploading
-              ? "Uploading..."
-              : existingEdition
-                ? "Replace Newspaper"
-                : "Upload Newspaper"}
-          </button>
-
-          {existingEdition && (
             <button
               type="button"
               onClick={
-                handleDelete
+                handleLogout
               }
               disabled={
                 uploading ||
@@ -1169,23 +1809,589 @@ function Admin() {
               }
               style={{
                 padding:
-                  "11px 20px",
+                  "10px 18px",
+                border: "none",
+                borderRadius:
+                  "9px",
+                background:
+                  "#111827",
+                color:
+                  "#ffffff",
+                fontWeight: 600,
                 cursor:
                   uploading ||
                   deleting
                     ? "not-allowed"
                     : "pointer",
+                opacity:
+                  uploading ||
+                  deleting
+                    ? 0.6
+                    : 1,
               }}
             >
-              {deleting
-                ? "Deleting..."
-                : "Delete Newspaper"}
+              Sign Out
             </button>
+          </div>
+        </div>
+
+        {/* ==================================================
+            ADMIN FORM
+        ================================================== */}
+
+        <form
+          onSubmit={
+            handleUpload
+          }
+          style={{
+            background:
+              "#ffffff",
+            borderRadius:
+              "18px",
+            padding:
+              "24px",
+            boxShadow:
+              "0 8px 30px rgba(0,0,0,0.07)",
+          }}
+        >
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom:
+                "22px",
+            }}
+          >
+            Upload Newspaper
+          </h2>
+
+          {/* =================================================
+              DATE
+          ================================================= */}
+
+          <div
+            style={{
+              marginBottom:
+                "20px",
+            }}
+          >
+            <label
+              htmlFor="newspaper-date"
+              style={{
+                display:
+                  "block",
+                marginBottom:
+                  "8px",
+                fontWeight:
+                  600,
+              }}
+            >
+              Newspaper Date
+            </label>
+
+            <input
+              id="newspaper-date"
+              type="date"
+              value={date}
+              onChange={(
+                event
+              ) => {
+                setDate(
+                  event.target.value
+                );
+
+                setFile(
+                  null
+                );
+
+                if (
+                  fileInputRef.current
+                ) {
+                  fileInputRef.current.value =
+                    "";
+                }
+
+                setMessage(
+                  ""
+                );
+
+                setMessageType(
+                  ""
+                );
+              }}
+              disabled={
+                uploading ||
+                deleting
+              }
+              style={{
+                width:
+                  "100%",
+                boxSizing:
+                  "border-box",
+                padding:
+                  "13px 14px",
+                border:
+                  "1px solid #d1d5db",
+                borderRadius:
+                  "10px",
+                fontSize:
+                  "16px",
+                background:
+                  uploading ||
+                  deleting
+                    ? "#f3f4f6"
+                    : "#ffffff",
+              }}
+            />
+
+            {checkingEdition && (
+              <p
+                style={{
+                  margin:
+                    "8px 0 0",
+                  color:
+                    "#666",
+                  fontSize:
+                    "14px",
+                }}
+              >
+                Checking this date...
+              </p>
+            )}
+          </div>
+
+          {/* =================================================
+              FILE
+          ================================================= */}
+
+          <div
+            style={{
+              marginBottom:
+                "20px",
+            }}
+          >
+            <label
+              htmlFor="newspaper-pdf"
+              style={{
+                display:
+                  "block",
+                marginBottom:
+                  "8px",
+                fontWeight:
+                  600,
+              }}
+            >
+              Newspaper PDF
+            </label>
+
+            <input
+              ref={
+                fileInputRef
+              }
+              id="newspaper-pdf"
+              type="file"
+              accept=".pdf,application/pdf"
+              onClick={(
+                event
+              ) => {
+                // Important for mobile browsers:
+                // allows selecting the same PDF again.
+                event.currentTarget.value =
+                  "";
+              }}
+              onChange={
+                handleFileChange
+              }
+              disabled={
+                uploading ||
+                deleting
+              }
+              style={{
+                width:
+                  "100%",
+                boxSizing:
+                  "border-box",
+                padding:
+                  "12px",
+                border:
+                  "1px solid #d1d5db",
+                borderRadius:
+                  "10px",
+                background:
+                  uploading ||
+                  deleting
+                    ? "#f3f4f6"
+                    : "#ffffff",
+                fontSize:
+                  "15px",
+              }}
+            />
+
+            {/* Selected file */}
+            {file && (
+              <div
+                style={{
+                  marginTop:
+                    "12px",
+                  padding:
+                    "13px 14px",
+                  borderRadius:
+                    "10px",
+                  background:
+                    "#ecfdf5",
+                  border:
+                    "1px solid #a7f3d0",
+                  color:
+                    "#065f46",
+                  wordBreak:
+                    "break-word",
+                }}
+              >
+                <strong>
+                  ✓ Selected PDF
+                </strong>
+
+                <div
+                  style={{
+                    marginTop:
+                      "4px",
+                    fontSize:
+                      "14px",
+                  }}
+                >
+                  {file.name}
+                </div>
+
+                <div
+                  style={{
+                    marginTop:
+                      "3px",
+                    fontSize:
+                      "13px",
+                    opacity:
+                      0.8,
+                  }}
+                >
+                  {(
+                    file.size /
+                    (1024 *
+                      1024)
+                  ).toFixed(
+                    2
+                  )}{" "}
+                  MB
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* =================================================
+              EXISTING EDITION INFO
+          ================================================= */}
+
+          {existingEdition && (
+            <div
+              style={{
+                marginBottom:
+                  "20px",
+                padding:
+                  "15px",
+                borderRadius:
+                  "10px",
+                background:
+                  "#fffbeb",
+                border:
+                  "1px solid #fde68a",
+                color:
+                  "#92400e",
+              }}
+            >
+              <strong>
+                Newspaper already exists
+              </strong>
+
+              <p
+                style={{
+                  margin:
+                    "6px 0 0",
+                  fontSize:
+                    "14px",
+                }}
+              >
+                A newspaper for{" "}
+                <strong>
+                  {date}
+                </strong>{" "}
+                already exists. Uploading will
+                replace the existing PDF.
+              </p>
+            </div>
           )}
+
+          {/* =================================================
+              NEW EDITION INFO
+          ================================================= */}
+
+          {date &&
+            !existingEdition &&
+            !checkingEdition && (
+              <div
+                style={{
+                  marginBottom:
+                    "20px",
+                  padding:
+                    "15px",
+                  borderRadius:
+                    "10px",
+                  background:
+                    "#ecfdf5",
+                  border:
+                    "1px solid #a7f3d0",
+                  color:
+                    "#065f46",
+                }}
+              >
+                <strong>
+                  ✓ Date available
+                </strong>
+
+                <p
+                  style={{
+                    margin:
+                      "6px 0 0",
+                    fontSize:
+                      "14px",
+                  }}
+                >
+                  No newspaper exists for{" "}
+                  <strong>
+                    {date}
+                  </strong>
+                  .
+                </p>
+              </div>
+            )}
+
+          {/* =================================================
+              MESSAGE
+          ================================================= */}
+
+          {message && (
+            <div
+              style={{
+                marginBottom:
+                  "20px",
+                padding:
+                  "14px 15px",
+                borderRadius:
+                  "10px",
+
+                background:
+                  messageType ===
+                  "error"
+                    ? "#fef2f2"
+                    : messageType ===
+                      "info"
+                    ? "#eff6ff"
+                    : "#ecfdf5",
+
+                border:
+                  messageType ===
+                  "error"
+                    ? "1px solid #fecaca"
+                    : messageType ===
+                      "info"
+                    ? "1px solid #bfdbfe"
+                    : "1px solid #a7f3d0",
+
+                color:
+                  messageType ===
+                  "error"
+                    ? "#991b1b"
+                    : messageType ===
+                      "info"
+                    ? "#1e40af"
+                    : "#065f46",
+
+                wordBreak:
+                  "break-word",
+              }}
+            >
+              {message}
+            </div>
+          )}
+
+          {/* =================================================
+              BUTTONS
+          ================================================= */}
+
+          <div
+            style={{
+              display:
+                "flex",
+              gap:
+                "12px",
+              flexWrap:
+                "wrap",
+            }}
+          >
+            <button
+              type="submit"
+              disabled={
+                uploading ||
+                deleting ||
+                checkingEdition ||
+                !date ||
+                !file
+              }
+              style={{
+                flex:
+                  "1 1 220px",
+                minHeight:
+                  "48px",
+                padding:
+                  "12px 20px",
+                border:
+                  "none",
+                borderRadius:
+                  "10px",
+                background:
+                  uploading ||
+                  deleting ||
+                  checkingEdition ||
+                  !date ||
+                  !file
+                    ? "#9ca3af"
+                    : "#111827",
+                color:
+                  "#ffffff",
+                fontSize:
+                  "16px",
+                fontWeight:
+                  700,
+                cursor:
+                  uploading ||
+                  deleting ||
+                  checkingEdition ||
+                  !date ||
+                  !file
+                    ? "not-allowed"
+                    : "pointer",
+              }}
+            >
+              {uploading
+                ? "Uploading..."
+                : existingEdition
+                ? "Replace Newspaper"
+                : "Upload Newspaper"}
+            </button>
+
+            {existingEdition && (
+              <button
+                type="button"
+                onClick={
+                  handleDelete
+                }
+                disabled={
+                  uploading ||
+                  deleting
+                }
+                style={{
+                  flex:
+                    "1 1 160px",
+                  minHeight:
+                    "48px",
+                  padding:
+                    "12px 20px",
+                  border:
+                    "1px solid #dc2626",
+                  borderRadius:
+                    "10px",
+                  background:
+                    uploading ||
+                    deleting
+                      ? "#f3f4f6"
+                      : "#ffffff",
+                  color:
+                    "#dc2626",
+                  fontSize:
+                    "16px",
+                  fontWeight:
+                    700,
+                  cursor:
+                    uploading ||
+                    deleting
+                      ? "not-allowed"
+                      : "pointer",
+                }}
+              >
+                {deleting
+                  ? "Deleting..."
+                  : "Delete Newspaper"}
+              </button>
+            )}
+          </div>
+
+          {/* =================================================
+              MOBILE HELP
+          ================================================= */}
+
+          <div
+            style={{
+              marginTop:
+                "20px",
+              padding:
+                "13px 14px",
+              borderRadius:
+                "10px",
+              background:
+                "#f8fafc",
+              border:
+                "1px solid #e2e8f0",
+              color:
+                "#475569",
+              fontSize:
+                "13px",
+              lineHeight:
+                1.5,
+            }}
+          >
+            <strong>
+              Mobile upload:
+            </strong>{" "}
+            On Android or iPhone, tap the PDF field and
+            select your newspaper PDF from the device's
+            Files/Downloads app. After selection, the
+            filename should appear above the Upload button.
+          </div>
+        </form>
+
+        {/* ==================================================
+            BACK TO WEBSITE
+        ================================================== */}
+
+        <div
+          style={{
+            textAlign:
+              "center",
+            marginTop:
+              "22px",
+          }}
+        >
+          <Link
+            to="/"
+            style={{
+              color:
+                "#374151",
+              textDecoration:
+                "none",
+              fontWeight:
+                600,
+            }}
+          >
+            ← Back to Website
+          </Link>
         </div>
       </div>
     </div>
   );
 }
-
-export default Admin;
