@@ -7,9 +7,6 @@ export default async function handler(req, res) {
   try {
     // -------------------------------------------------------
     // Find a valid Supabase URL
-    //
-    // VITE_SUPABASE_URL is already used by the working
-    // frontend, so prefer it when it contains a valid URL.
     // -------------------------------------------------------
 
     const possibleUrls = [
@@ -57,6 +54,7 @@ export default async function handler(req, res) {
 
     const response = await fetch(apiUrl, {
       method: "GET",
+
       headers: {
         apikey: supabaseKey,
         Authorization: `Bearer ${supabaseKey}`,
@@ -97,18 +95,23 @@ export default async function handler(req, res) {
     }
 
     const latestDate =
-      String(editions[0].date).trim()
+      String(
+        editions[0].date
+      ).trim()
 
     // -------------------------------------------------------
-    // Thumbnail
+    // EXISTING IMAGE ENDPOINT
     //
-    // Your PDFs are stored in R2.
-    // Your thumbnails are stored in Supabase Storage.
+    // We already created:
+    //
+    // /api/share-image?date=YYYY-MM-DD
+    //
+    // This endpoint serves the actual newspaper thumbnail.
     // -------------------------------------------------------
 
     const thumbnailUrl =
-      `${supabaseUrl}` +
-      `/storage/v1/object/public/newspapers/thumbnails/${latestDate}.jpg`
+      `https://shubhodayam-bharath.vercel.app` +
+      `/api/share-image?date=${encodeURIComponent(latestDate)}`
 
     // -------------------------------------------------------
     // Website
@@ -117,11 +120,16 @@ export default async function handler(req, res) {
     const websiteUrl =
       "https://shubhodayam-bharath.vercel.app/"
 
+    // -------------------------------------------------------
+    // Social title
+    // -------------------------------------------------------
+
     const title =
       "Shubhodayam Bharath – Daily Telugu & English Newspaper"
 
     const description =
-      `Read the latest Shubhodayam Bharath newspaper online. Latest edition: ${latestDate}.`
+      `Read the latest Shubhodayam Bharath newspaper online. ` +
+      `Latest edition: ${latestDate}.`
 
     // -------------------------------------------------------
     // Social preview HTML
@@ -134,7 +142,9 @@ export default async function handler(req, res) {
 
   <meta charset="UTF-8" />
 
-  <title>${escapeHtml(title)}</title>
+  <title>
+    ${escapeHtml(title)}
+  </title>
 
   <meta
     name="description"
@@ -248,6 +258,10 @@ export default async function handler(req, res) {
 
 </html>`
 
+    // -------------------------------------------------------
+    // RESPONSE
+    // -------------------------------------------------------
+
     res.status(200)
 
     res.setHeader(
@@ -283,7 +297,8 @@ function isValidUrl(value) {
   if (!value) return false
 
   try {
-    const url = new URL(value)
+    const url =
+      new URL(value)
 
     return (
       url.protocol === "https:" ||
