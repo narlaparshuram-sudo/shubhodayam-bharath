@@ -1,16 +1,29 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "routes": [
+  "rewrites": [
     {
-      "src": "^/share/(\\d{4}-\\d{2}-\\d{2})$",
-      "dest": "/api/share/$1"
+      "source": "/share/:date",
+      "destination": "/api/share/:date"
     },
     {
-      "handle": "filesystem"
+      "source": "/home-share",
+      "destination": "/api/home-share"
     },
     {
-      "src": "^/(.*)$",
-      "dest": "/index.html"
+      "source": "/newspaper/:date",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/calendar",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/index.html"
     }
   ]
 }
